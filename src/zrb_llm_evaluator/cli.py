@@ -93,7 +93,7 @@ def run(
     typer.echo(f"Report:  {report_path}")
 
 
-# @sdlc REQ-003
+# @sdlc REQ-017
 @app.command()
 def list(
     dir: str = typer.Option("./out", "--dir", help="Output directory to list"),
@@ -121,7 +121,7 @@ def list(
         )
 
 
-# @sdlc REQ-003
+# @sdlc REQ-017
 @app.command()
 def report(
     dir: str = typer.Option("./out", "--dir", help="Output directory with results"),
@@ -141,12 +141,3 @@ def report(
     report_path = Path(dir) / "report.md"
     generate_markdown_report(results, report_path)
     typer.echo(f"Report generated: {report_path}")
-
-
-def main() -> None:
-    """Entry point for the CLI."""
-    app()
-
-
-if __name__ == "__main__":
-    main()

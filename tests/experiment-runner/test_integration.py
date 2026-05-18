@@ -210,3 +210,57 @@ class TestCustomValidatorExecuted:
         assert r.verification_result is not None
         assert r.verification_result.status == "EXCELLENT"
         assert r.verification_result.score == 0.95
+
+
+@pytest.mark.slow
+class TestStress100Cells:
+    """NFR-002: Stress test with 100+ cells."""
+
+    @pytest.mark.asyncio
+    async def test_stress_100_cells(self, tmp_path: Path) -> None:
+        """Run 100+ cells with mock subprocess returning instantly."""
+        cases_dir = tmp_path / "stress-cases"
+        cases_dir.mkdir()
+        case_dir = cases_dir / "s-case"
+        case_dir.mkdir()
+        (case_dir / "instruction.txt").write_text("Test", encoding="utf-8")
+        (case_dir / "validator.py").write_text(
+            "from pathlib import Path\n"
+            "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
+            "from zrb_llm_evaluator.protocols import ValidatorProtocol\n"
+            "class V:\n"
+            "    def validate(self, output_dir, log_content):\n"
+            "        return ValidationResult(status='PASS', score=0.9, details=[])\n"
+            "validator = V()\n"
+        )
+
+        from zrb_llm_evaluator.loader import load_test_cases
+        from zrb_llm_evaluator.runner import run_experiment
+
+        # 10 models x 1 case x 10 trials = 100 cells
+        models = [f"test:m{i}" for i in range(10)]
+        config = ExperimentConfig(
+            models=models,
+            test_case_dirs=[case_dir],
+            trials=10,
+            parallelism=10,
+            timeout=30,
+            cli_name="echo",
+        )
+
+        test_cases = load_test_cases([case_dir])
+        output_dir = tmp_path / "out-stress"
+
+        results = await run_experiment(config, test_cases, output_dir)
+
+        assert len(results) == 100
+        terminal_statuses = {"EXCELLENT", "PASS", "FAIL", "TIMEOUT", "ERROR"}
+        for r in results:
+            assert r.status in terminal_statuses, f"Non-terminal status: {r.status}"
+
+        # Verify results.json exists and has 100 entries
+        results_json = output_dir / "results.json"
+        assert results_json.exists()
+        import json
+        data = json.loads(results_json.read_text(encoding="utf-8"))
+        assert len(data) == 100

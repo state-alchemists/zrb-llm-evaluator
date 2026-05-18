@@ -51,13 +51,12 @@
 ### TrialResult
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
+| id | UUID | PK, auto-generated | Unique trial result identifier |
 | model | str | Required | The model used |
 | test_case | str | Required | The test case name |
 | trial_index | int | Required, >= 1 | Trial number within this model × test case |
 | status | enum | Required: EXCELLENT, PASS, FAIL, TIMEOUT, ERROR | Final classification |
 | duration | float | Required | Wall-clock duration in seconds |
-| tool_calls | list[str] | — | Tool call names extracted from the log |
-| tool_call_count | int | — | Number of tool calls |
 | exit_code | int | Required | zrb subprocess exit code |
 | log_path | str | Required | Path to the saved LLM conversation history |
 | verification_result | ValidationResult | — | The typed output from the test case's validator |

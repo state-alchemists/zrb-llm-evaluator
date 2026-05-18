@@ -18,10 +18,16 @@ from typing import TYPE_CHECKING, Literal
 
 from zrb_llm_evaluator.cost_parser import parse_cost_summary
 from zrb_llm_evaluator.loader import TestCase, make_safe_name, make_session_name
-from zrb_llm_evaluator.models import ExperimentConfig, TrialResult, ValidationResult
+from zrb_llm_evaluator.models import (
+    ExperimentConfig,
+    TrialResult,
+    ValidationCheck,
+    ValidationResult,
+)
 
 if TYPE_CHECKING:
     from zrb_llm_evaluator.protocols import ValidatorProtocol  # noqa: F401
+    # type: ignore[valid-type] — @runtime_checkable Protocol validated via isinstance at runtime
 
 # Terminal statuses — cells with these statuses are skipped on resume.
 TERMINAL_STATUSES: set[str] = {
@@ -88,6 +94,7 @@ class ResumeManager:
         self._results_path = results_path
         self._results: list[TrialResult] = []
         self._completed_keys: set[tuple[str, str, int]] = set()
+        self._result_map: dict[tuple[str, str, int], TrialResult] = {}
 
     # @sdlc REQ-006
     def load(self) -> list[TrialResult]:
@@ -101,18 +108,22 @@ class ResumeManager:
         if not self._results_path.is_file():
             self._results = []
             self._completed_keys.clear()
+            self._result_map.clear()
             return []
 
         raw = self._results_path.read_text(encoding="utf-8")
         if not raw.strip():
             self._results = []
             self._completed_keys.clear()
+            self._result_map.clear()
             return []
 
         data: list[dict] = json.loads(raw)
         self._results = [TrialResult.model_validate(item) for item in data]
         for r in self._results:
-            self._completed_keys.add((r.model, r.test_case, r.trial_index))
+            key = (r.model, r.test_case, r.trial_index)
+            self._completed_keys.add(key)
+            self._result_map[key] = r
         return self._results
 
     # @sdlc REQ-006
@@ -133,11 +144,10 @@ class ResumeManager:
         key = (model, test_case, trial_index)
         if key not in self._completed_keys:
             return False
-        idx = next(
-            i for i, r in enumerate(self._results)
-            if r.model == model and r.test_case == test_case and r.trial_index == trial_index
-        )
-        return self._results[idx].status in TERMINAL_STATUSES
+        result = self._result_map.get(key)
+        if result is None:
+            return False
+        return result.status in TERMINAL_STATUSES
 
     # @sdlc REQ-003, REQ-017
     def append(self, result: TrialResult) -> None:
@@ -149,7 +159,9 @@ class ResumeManager:
 
         """
         self._results.append(result)
-        self._completed_keys.add((result.model, result.test_case, result.trial_index))
+        key = (result.model, result.test_case, result.trial_index)
+        self._completed_keys.add(key)
+        self._result_map[key] = result
         self._flush()
 
     def _flush(self) -> None:
@@ -228,6 +240,7 @@ class TrialRunner:
         history_dir.mkdir(parents=True, exist_ok=True)
 
         log_path = cell_dir / "chat.log"
+        history_log_path = history_dir / f"{session_name}.json"
         env = os.environ.copy()
         env["ZRB_LLM_HISTORY_DIR"] = str(history_dir)
 
@@ -268,7 +281,7 @@ class TrialRunner:
                     status="TIMEOUT",
                     duration=duration,
                     exit_code=-1,
-                    log_path=str(log_path),
+                    log_path=str(history_log_path),
                 )
 
             duration = time.monotonic() - start
@@ -305,13 +318,19 @@ class TrialRunner:
                     # Validator result determines final status for clean exits
                     if verification_marker is None:
                         status = verification_result.status
-                except Exception:
+                except Exception as exc:
                     # @sdlc REQ-011
                     status = "ERROR"
                     verification_result = ValidationResult(
                         status="FAIL",
                         score=0.0,
-                        details=[],
+                        details=[
+                            ValidationCheck(
+                                name="validator_error",
+                                passed=False,
+                                message=str(exc),
+                            ),
+                        ],
                     )
 
             return TrialResult(
@@ -321,7 +340,7 @@ class TrialRunner:
                 status=status,
                 duration=duration,
                 exit_code=exit_code,
-                log_path=str(log_path),
+                log_path=str(history_log_path),
                 verification_result=verification_result,
                 total_tokens=token_fields["total_tokens"],
                 input_tokens=token_fields["input_tokens"],
@@ -339,7 +358,7 @@ class TrialRunner:
                 status="ERROR",
                 duration=duration,
                 exit_code=-1,
-                log_path=str(log_path),
+                log_path=str(history_log_path),
             )
 
 

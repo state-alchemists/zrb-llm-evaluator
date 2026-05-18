@@ -1,1 +1,190 @@
 # zrb-llm-evaluator
+
+Multi-trial experiment runner for testing LLMs against structured test cases via `zrb chat`.
+
+Given a set of models and test cases, it runs every combination across N trials, collects structured results, and generates reports. Supports concurrent execution, timeout handling, resume from partial runs, and pluggable validators.
+
+## Quick Start
+
+```bash
+# Install
+poetry install
+
+# Create a test case directory
+mkdir -p my-cases/hello-world
+cat > my-cases/hello-world/instruction.txt << 'EOF'
+Write a Python function that returns "hello, world".
+EOF
+
+# Run an experiment (requires zrb installed and configured)
+zrb-llm-evaluator run \
+  --models openai:gpt-4o \
+  --test-cases ./my-cases/hello-world/ \
+  --trials 1
+```
+
+## Features
+
+- Runs N models × M test cases × T trials as a flat experiment grid
+- Concurrent trial execution with configurable parallelism (asyncio + semaphore)
+- Per-trial timeout kills subprocess and preserves partial output
+- Resume support: re-run with the same output directory to skip completed cells
+- Pluggable validators: each test case provides a `validator.py` implementing a typed protocol
+- Atomic `results.json` writes (temp file + `os.rename`)
+- Cost summary line parsing from `zrb` output
+- Custom CLI binary name for white-labeled `zrb` forks
+
+## Installation
+
+**Prerequisites:** Python ≥ 3.11, [Poetry](https://python-poetry.org/), and an installed `zrb` CLI with API keys configured.
+
+```bash
+git clone <repo>
+cd zrb-llm-evaluator
+poetry install
+```
+
+Verify the CLI works:
+
+```bash
+poetry run zrb-llm-evaluator --help
+```
+
+## Usage
+
+### Test Case Format
+
+Each test case is a directory containing:
+
+```
+my-cases/<test-name>/
+├── instruction.txt    # Required — the prompt sent to the LLM
+├── validator.py       # Required — validation logic (see below)
+└── workdir/           # Optional — files copied into the trial's working directory
+```
+
+### Writing a Validator
+
+`validator.py` must expose a top-level `validator` object that implements `ValidatorProtocol`:
+
+```python
+# my-cases/hello-world/validator.py
+from pathlib import Path
+from zrb_llm_evaluator.models import ValidationResult, ValidationCheck
+from zrb_llm_evaluator.protocols import ValidatorProtocol
+
+class HelloValidator:
+    def validate(self, output_dir: Path, log_content: str) -> ValidationResult:
+        passed = "hello, world" in log_content.lower()
+        return ValidationResult(
+            status="PASS" if passed else "FAIL",
+            score=1.0 if passed else 0.0,
+            details=[
+                ValidationCheck(
+                    name="contains_greeting",
+                    passed=passed,
+                    message="Output contains 'hello, world'" if passed
+                            else "Missing expected greeting",
+                )
+            ],
+        )
+
+validator = HelloValidator()
+```
+
+The framework validates protocol conformance at load time. `validator.py` that doesn't implement `ValidatorProtocol` is rejected before any trial runs.
+
+### ValidationResult
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `"EXCELLENT" \| "PASS" \| "FAIL"` | Overall outcome |
+| `score` | `float` (0.0–1.0) | Normalized score |
+| `details` | `list[ValidationCheck]` | Per-check breakdown |
+
+## CLI Reference
+
+### `run`
+
+Run a full experiment.
+
+```
+zrb-llm-evaluator run \
+  --models openai:gpt-4o,google-gla:gemini-2.5-flash \
+  --test-cases ./cases/bug-fix,./cases/copywriting \
+  --trials 3 \
+  --parallelism 4 \
+  --timeout 300 \
+  --cli-name zrb \
+  --output-dir ./out
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--models` | required | Comma-separated list in `provider:name` format |
+| `--test-cases` | required | Comma-separated list of test case directory paths |
+| `--trials` | `3` | Trials per model × test case cell |
+| `--parallelism` | `4` | Max concurrent subprocesses |
+| `--timeout` | `300` | Per-trial timeout in seconds |
+| `--cli-name` | `zrb` | CLI binary to invoke |
+| `--output-dir` | `./out` | Output directory for results |
+
+Output: `results.json` (structured) + `report.md` (human-readable).
+
+### `list`
+
+List completed trials from a previous experiment.
+
+```
+zrb-llm-evaluator list --dir ./out
+```
+
+### `report`
+
+Re-generate the Markdown report from existing `results.json`.
+
+```
+zrb-llm-evaluator report --dir ./out
+```
+
+## Architecture
+
+The runner has four layers:
+
+1. **CLI** (`cli.py`) — Typer entry point, parses args, validates config
+2. **Loader** (`loader.py`) — Discovers test cases from directories, imports validators, checks protocol conformance
+3. **Runner** (`runner.py`) — Async subprocess orchestration with `asyncio.Semaphore`, `asyncio.wait_for`, and `ResumeManager` for idempotent resumption. Each trial creates an isolated directory `{output}/{model}/{test_case}/trial-{N}/` with its own history directory
+4. **Reporter** (`reporter.py`) — Generates Markdown and JSON output with atomic file writes
+
+Key design decisions are documented in `docs/adr/`.
+
+## Output Structure
+
+```
+./out/
+├── results.json          # Structured results (list of TrialResult)
+├── report.md             # Human-readable report
+├── openai_gpt-4o/
+│   └── bug-fix/
+│       ├── trial-1/
+│       │   ├── chat.log              # Raw conversation log
+│       │   └── history/              # ZRB_LLM_HISTORY_DIR
+│       │       └── <session>.json
+│       ├── trial-2/
+│       └── trial-3/
+└── google-gla_gemini-2.5-flash/
+    └── ...
+```
+
+## Development
+
+```bash
+poetry install --with dev
+poetry run pytest tests/experiment-runner/
+poetry run ruff check
+poetry run mypy src/
+```
+
+## License
+
+MIT.

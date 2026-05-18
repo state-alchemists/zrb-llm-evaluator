@@ -1,11 +1,12 @@
 # GENERATED FROM SPEC: specs/experiment-runner/requirements.md
-# IMPLEMENTS: REQ-003, REQ-015, REQ-017, REQ-019, NFR-002, RULE-001, RULE-003, RULE-010
+# IMPLEMENTS: REQ-003, REQ-015, REQ-017, REQ-019, NFR-002, RULE-001, RULE-003
 
 """Pydantic v2 models for the experiment runner."""
 
 from __future__ import annotations
 
 import re
+import uuid
 from pathlib import Path
 from typing import Literal
 
@@ -34,6 +35,7 @@ class ValidationResult(BaseModel):
 class TrialResult(BaseModel):
     """Outcome of a single trial."""
 
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     model: str
     test_case: str
     trial_index: int = Field(ge=1)
@@ -41,8 +43,6 @@ class TrialResult(BaseModel):
     duration: float = Field(ge=0.0)
     exit_code: int
     log_path: str
-    tool_calls: list[str] = Field(default_factory=list)
-    tool_call_count: int = 0
     verification_result: ValidationResult | None = None
     total_tokens: int = 0
     input_tokens: int = 0
@@ -72,3 +72,22 @@ class ExperimentConfig(BaseModel):
                 msg = f"Model {model!r} must be in 'provider:name' format (e.g. 'openai:gpt-4o')"
                 raise ValueError(msg)
         return v
+
+
+class Experiment(BaseModel):
+    """A full experiment run with config, results, and timing."""
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    config: ExperimentConfig
+    results: list[TrialResult] = Field(default_factory=list)
+    started_at: str = ""  # ISO datetime
+    completed_at: str | None = None
+
+
+class Report(BaseModel):
+    """A generated report referencing an experiment's results."""
+
+    experiment_id: str
+    markdown_path: str
+    json_path: str
+    generated_at: str  # ISO datetime

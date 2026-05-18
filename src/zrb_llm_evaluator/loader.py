@@ -24,7 +24,7 @@ class TestCase:
     name: str
     instruction: str
     workdir: Path | None = None
-    validator: ValidatorProtocol | None = None  # type: ignore[valid-type]  # using Protocol
+    validator: ValidatorProtocol | None = None  # type: ignore[valid-type]  # @runtime_checkable Protocol validated via isinstance at runtime
 
     _validator_module: str | None = field(default=None, repr=False)
 
@@ -154,7 +154,7 @@ def make_session_name(model: str, test_case: str, trial_index: int) -> str:
     return f"{safe_model}-{test_case}-trial-{trial_index}"
 
 
-def _import_validator(validator_path: Path) -> ValidatorProtocol:  # type: ignore[valid-type]
+def _import_validator(validator_path: Path) -> ValidatorProtocol:  # type: ignore[valid-type]  # @runtime_checkable Protocol validated via isinstance at runtime
     """Dynamically import a validator module and check conformance.
 
     Args:

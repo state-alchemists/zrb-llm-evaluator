@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from zrb_llm_evaluator.cost_parser import parse_cost_summary
@@ -111,7 +111,7 @@ class TestTrialRunner:
         # Monkey-patch create_subprocess_exec to return a slow mock
         mock_proc = AsyncMock()
         mock_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError)
-        mock_proc.kill = AsyncMock()
+        mock_proc.kill = Mock()
         mock_proc.wait = AsyncMock(return_value=0)
 
         async def mock_create_subprocess_exec(*args: object, **kwargs: object) -> AsyncMock:
@@ -418,6 +418,55 @@ class TestRunnerValidatorIntegration:
         assert len(calls) == 1, f"Validator was called {len(calls)} times, expected 1"
 
     @pytest.mark.asyncio
+    async def test_validator_receives_log_content(
+        self, tmp_path: Path
+    ) -> None:
+        """UT-011: Validator receives the expected output text in log_content."""
+        case_dir = tmp_path / "log-case"
+        case_dir.mkdir(parents=True, exist_ok=True)
+        expected_output = "Hello"
+        (case_dir / "instruction.txt").write_text("Hello", encoding="utf-8")
+
+        captured_log = None
+        class LogCapturingValidator:
+            def validate(self, output_dir, log_content):
+                nonlocal captured_log
+                captured_log = log_content
+                return ValidationResult(status="PASS", score=1.0, details=[])
+
+        (case_dir / "validator.py").write_text(
+            "from pathlib import Path\n"
+            "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
+            "class LCV:\n"
+            "    def validate(self, output_dir, log_content):\n"
+            "        return ValidationResult(status='PASS', score=1.0, details=[])\n"
+            "validator = LCV()\n"
+        )
+
+        from zrb_llm_evaluator.loader import load_test_case
+        tc = load_test_case(case_dir)
+        tc.validator = LogCapturingValidator()  # type: ignore[assignment]
+
+        config = ExperimentConfig(
+            models=["openai:gpt-4o"],
+            test_case_dirs=[case_dir],
+            trials=1,
+            parallelism=1,
+            timeout=30,
+            cli_name="echo",  # echo outputs the arguments
+        )
+        output_dir = tmp_path / "out"
+
+        runner = TrialRunner(config, tc, output_dir)
+        result = await runner.run("openai:gpt-4o", 1)
+
+        assert result.status == "PASS", f"Expected PASS, got {result.status}"
+        assert captured_log is not None, "Validator was not called"
+        assert expected_output in captured_log, (
+            f"Expected {expected_output!r} in log_content, got {captured_log!r}"
+        )
+
+    @pytest.mark.asyncio
     async def test_validator_exception_records_error(
         self, tmp_path: Path, sample_test_case
     ) -> None:
@@ -441,7 +490,7 @@ class TestRunnerValidatorIntegration:
         original_validator = sample_test_case.validator
 
         class BrokenValidator:
-            def validate(self, output_dir_val, log_content):
+            def validate(self, output_dir, log_content):
                 msg = "bad check"
                 raise ValueError(msg)
 
@@ -452,6 +501,10 @@ class TestRunnerValidatorIntegration:
             result = await runner.run("openai:gpt-4o", 1)
 
         assert result.status == "ERROR"
+        assert result.verification_result is not None
+        assert len(result.verification_result.details) == 1
+        assert result.verification_result.details[0].name == "validator_error"
+        assert "bad check" in result.verification_result.details[0].message
 
         # Restore
         sample_test_case.validator = original_validator
@@ -473,7 +526,7 @@ class TestRunnerValidatorIntegration:
 
         mock_proc = AsyncMock()
         mock_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError)
-        mock_proc.kill = AsyncMock()
+        mock_proc.kill = Mock()
         mock_proc.wait = AsyncMock(return_value=0)
 
         async def mock_create_subprocess_exec(*args: object, **kwargs: object) -> AsyncMock:
@@ -485,8 +538,9 @@ class TestRunnerValidatorIntegration:
 
         assert result.status == "TIMEOUT"
         assert result.log_path != ""
-        log_file = Path(result.log_path)
-        assert log_file.exists()
+        # log_path points to zrb history JSON; on timeout the file may not exist yet
+        assert result.log_path.endswith(".json")
+        assert "history" in result.log_path
 
     @pytest.mark.asyncio
     async def test_results_json_atomic_write(
