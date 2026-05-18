@@ -1,0 +1,50 @@
+# GENERATED FROM SPEC: specs/experiment-runner/requirements.md
+# IMPLEMENTS: REQ-006, REQ-014, RULE-006
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "zrb-llm-evaluator"
+version = "0.1.0"
+description = "Multi-trial experiment runner for zrb chat"
+authors = ["Go Frendi <go.frendi.gunawan@example.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.11"
+pydantic = "^2"
+typer = "^0.12"
+rich = "^13"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8"
+pytest-asyncio = "^0.24"
+pytest-mock = "^3"
+ruff = "^0.5"
+mypy = "^1.10"
+
+[tool.poetry.scripts]
+zrb-llm-evaluator = "zrb_llm_evaluator.cli:app"
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "T201", "D"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "N999"]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+explicit_package_bases = true
+namespace_packages = true

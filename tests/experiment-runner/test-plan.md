@@ -1,0 +1,69 @@
+# Test Plan: experiment-runner
+
+**Convention**: pytest — `test_<component>_<condition>_<expected>()`
+
+## Unit Tests
+
+| ID | Req | Test Name | Input | Expected |
+|----|-----|-----------|-------|----------|
+| UT-001 | REQ-001 | test_session_name_generates_unique_per_trial | model=m1, case=c1, trial=1,2,3 | Three unique session strings, each containing model/case/trial |
+| UT-002 | REQ-002 | test_semaphore_limits_concurrent_trials | 8 tasks, parallelism=4 | At most 4 tasks running simultaneously at any point |
+| UT-003 | REQ-003 | test_results_written_after_each_trial | 3 trials, results.json path | After each trial completes, results.json has exactly N entries |
+| UT-004 | REQ-004 | test_iterates_all_combinations | 2 models × 2 cases × 2 trials | 8 cells generated in the cell plan |
+| UT-005 | REQ-005 | test_timeout_kills_subprocess_and_records | mock subprocess that sleeps 60s, timeout=1s | TrialResult.status == "TIMEOUT" |
+| UT-006 | REQ-006 | test_resume_skips_terminal_cells | results.json with 2 terminal + 1 pending | Only 1 cell executes; 2 are skipped |
+| UT-007 | REQ-007 | test_nonzero_exit_records_error | mock subprocess returning exit_code=1 | TrialResult.status == "ERROR" |
+| UT-008 | REQ-007 | test_verification_marker_overrides_exit | mock subprocess returning exit=1 with VERIFICATION_RESULT: PASS | TrialResult.status == "PASS" |
+| UT-009 | REQ-008 | test_timeout_result_references_log_file | timed-out trial | TrialResult.log_path is a non-empty path to an existing file |
+| UT-010 | REQ-009 | test_validator_invoked_on_completion | mock subprocess returning exit=0, valid validator | validator.validate() called once with output_dir and log_content |
+| UT-011 | REQ-009 | test_validator_receives_log_content | mock subprocess writing known output | log_content argument contains the expected output text |
+| UT-012 | REQ-010 | test_parallelism_1_sequential | parallelism=1, 3 trials | Trials execute one after another (start times are monotonic with gaps) |
+| UT-013 | REQ-011 | test_validator_exception_records_error | validator that raises ValueError("bad check") | TrialResult.status == "ERROR", details contain "bad check" |
+| UT-014 | REQ-012 | test_cli_name_custom_binary | --cli-name=my-zrb | Subprocess invoked as `my-zrb chat ...` instead of `zrb chat ...` |
+| UT-015 | REQ-013 | test_missing_validator_rejected | test case dir without validator module | Runner exits with INVALID_CASE before any trial |
+| UT-016 | REQ-014 | test_missing_required_args_exits | run command with no args | Non-zero exit, usage printed to stderr |
+| UT-017 | REQ-015 | test_model_format_provider_colon_name | "openai:gpt-4o" | Accepted and stored as-is |
+| UT-018 | REQ-015 | test_model_format_rejects_bare_name | "gpt-4o" | Rejected with validation error |
+| UT-019 | REQ-016 | test_env_var_set_before_invocation | trial runner | ZRB_LLM_HISTORY_DIR set to per-cell output dir; --session passed to subprocess |
+| UT-020 | REQ-017 | test_results_json_atomic_write | 1 trial | results.json is valid JSON with exactly 1 TrialResult entry |
+| UT-021 | REQ-018 | test_output_dir_structure | 2 models × 1 case × 2 trials | Dirs exist: {out}/model1/case1/trial-1/, {out}/model1/case1/trial-2/ etc. |
+| UT-022 | REQ-019 | test_cost_summary_parsed | stdout containing "Total tokens: 150 \| Input: 100 \| Output: 50 \| Cache: 0" | TrialResult.total_tokens=150, input_tokens=100, output_tokens=50 |
+| UT-023 | REQ-019 | test_cost_summary_missing_defaults_zero | stdout with no cost line | All token fields default to 0 |
+| UT-024 | NFR-001 | test_overhead_without_llm | mock subprocess returning instantly | Wall-clock overhead < 2s |
+| UT-025 | RULE-005 | test_no_zrb_import_in_runner | runner module | No `import zrb` or `from zrb` outside test fixtures |
+
+## Integration Tests
+
+| ID | Scope | Test Name | Setup | Assertion |
+|----|-------|-----------|-------|-----------|
+| IT-001 | ExperimentConfig + CLI | test_run_command_full_pipeline | Create temp dirs with 2 mock test cases; run `zrb-llm-evaluator run --models openai:gpt-4o --test-cases ./cases/ --trials 2 --output-dir ./out` | results.json exists with 4 entries; all statuses are terminal |
+| IT-002 | Resume | test_resume_mid_experiment | Run 2 models × 1 case × 2 trials; interrupt after cell 3; restart | Only cell 4 executes; results.json has 4 entries |
+| IT-003 | Parallelism | test_parallel_execution | Run 8 cells with parallelism=4 | Total wall-clock < 3× single-trial latency (confirms concurrency) |
+| IT-004 | Validator protocol | test_custom_validator_executed | Test case with validator.py returning ValidationResult(status=EXCELLENT, score=0.95, details=[]) | results.json has verification_result with score=0.95 |
+
+## End-to-End Tests
+
+| ID | Story | Scenario | Steps | Expected |
+|----|-------|----------|-------|----------|
+| E2E-001 | US-001 | Full experiment run | 1. Create 2 test case dirs with validators; 2. Run `zrb-llm-evaluator run --models m1,m2 --test-cases ./cases/ --trials 2 --output-dir ./exp`; 3. Inspect ./exp | results.json has 8 entries; report.md and results.json exist; all entries have terminal status |
+| E2E-002 | US-003 | Timeout preserves history | 1. Create a test case with a long-running instruction; 2. Run with --timeout 5; 3. Check logs | Trial has TIMEOUT status; history JSON file exists on disk |
+| E2E-003 | US-007 | Resume after Ctrl+C | 1. Start experiment with 4 cells; 2. Kill after cell 2; 3. Re-run with same output dir | Cells 1-2 skipped; cells 3-4 execute; final results.json has 4 entries |
+
+## Property-Based Tests
+
+N/A — no property-testing framework configured.
+
+## Design Property Coverage
+
+| Property | Covered By | Notes |
+|----------|------------|-------|
+| Round-Trip | UT-020, UT-022, UT-023 | Pydantic serialization/deserialization verified via results.json write + token field defaults |
+| Uniqueness | UT-001, UT-018 | Session name uniqueness + output dir hierarchy enforcement |
+| Atomicity | UT-020 | Atomic write via temp file + os.rename; results.json always valid JSON |
+| Validation | UT-013, UT-015, UT-016, UT-017, UT-018 | Config validation (model format, required args) + test case import rejection |
+| Idempotency | UT-006, IT-002 | Resume skips terminal cells; re-run produces identical results |
+
+## Test Data Strategy
+- **Fixtures**: `tests/experiment-runner/conftest.py` — temp directories, mock subprocess factory, sample test case directories with validators, sample results.json files
+- **Synthetic data**: Generated inline via pytest fixtures. Pydantic factories using `.model_validate()` for round-trip tests.
+- **Cleanup**: `tmp_path` fixture (pytest built-in) for all filesystem operations. No global state between tests.
