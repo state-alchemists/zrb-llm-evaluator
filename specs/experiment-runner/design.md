@@ -76,6 +76,17 @@ The `ZRB_LLM_HISTORY_DIR` env var is set to the trial's `history/`
 directory (a sibling of `workdir/`), so zrb writes the conversation
 history outside the LLM's `cwd`.
 
+## Report Rendering (per ADR-8)
+
+`MarkdownReporter` builds `report.md` from the in-memory list of `TrialResult` after the experiment completes (or on demand via `zrb-llm-evaluator report`):
+
+1. **Sort** — Sort trials by `(model, test_case, trial_index)` ascending. The sort is stable; deterministic input produces a byte-identical report.
+2. **Bold-best computation** — For each test case, filter the trials whose status is `PASS` or `EXCELLENT`. Within that filtered group compute four extrema: `min(duration)`, `max(score)`, `min(total_tokens)`, `min(tool_call_count)`. For each trial row, the cell rendering a metric whose value equals the corresponding extremum (within that test case's filtered group) is wrapped in `**…**`. Ties produce multiple bold cells. Trials excluded from the filter never receive bold formatting.
+3. **Status icon** — Each rendered status cell is the concatenation of the icon for that status plus a space plus the status name (e.g. `✅ PASS`). Mapping is fixed: `EXCELLENT`→👍, `PASS`→✅, `FAIL`→❌, `TIMEOUT`→⏱️, `ERROR`→⚠️.
+4. **Output format** — Pure Markdown only. No `<b>`, `<span>`, or other HTML. Emoji are inserted as literal Unicode codepoints.
+
+Determinism: given the same `results.json`, repeated runs of `MarkdownReporter` produce byte-identical `report.md`.
+
 ## Data Model
 
 | Entity | Fields Used | Notes |

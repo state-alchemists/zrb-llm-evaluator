@@ -37,6 +37,17 @@
 | UT-029 | REQ-022 | test_empty_workdir_created_when_no_source | test case with no `workdir/` to stage | `cell_dir/workdir/` exists and is an empty directory before subprocess launch |
 | UT-030 | REQ-023 | test_staged_files_land_in_nested_workdir | test case with workdir containing `seed.txt`, `data/notes.md` | `cell_dir/workdir/seed.txt` and `cell_dir/workdir/data/notes.md` exist; `cell_dir/seed.txt` does NOT exist |
 | UT-031 | REQ-024 | test_metadata_files_never_staged | test case directory containing `validator.py`, `instruction.txt`, and a `workdir/` with `foo.txt` | `cell_dir/workdir/foo.txt` exists; `cell_dir/workdir/validator.py` does NOT exist; `cell_dir/workdir/instruction.txt` does NOT exist |
+| UT-032 | REQ-025 | test_markdown_report_rows_sorted_by_model_case_trial | Unsorted TrialResults across 2 models × 2 cases × 2 trials | Rows in report.md appear ordered `(model ASC, case ASC, trial_index ASC)` |
+| UT-033 | REQ-026 | test_markdown_report_excludes_failures_from_bold_scope | One test case: a FAIL trial with duration=0.5s, a PASS trial with duration=1.0s (parametrized over FAIL/TIMEOUT/ERROR) | The 1.0s PASS cell is bold; the FAIL/TIMEOUT/ERROR rows have no bold cells |
+| UT-034 | REQ-026 | test_markdown_report_bold_scope_is_per_test_case | Case A best PASS duration=1.0s; Case B best PASS duration=2.0s | Case B's 2.0s cell is bolded (best within its own test case) despite being slower than Case A's best |
+| UT-035 | REQ-027 | test_markdown_report_contains_no_html | Any rendered report | Rendered text contains no `<b>`, `<span>`, or other HTML tags |
+| UT-036 | REQ-028 | test_markdown_report_bolds_best_duration | 3 PASS trials with durations 1.0, 2.0, 3.0 in one case | Only the 1.0s cell wrapped in `**…**` |
+| UT-037 | REQ-028 | test_markdown_report_bolds_best_score | 3 PASS trials with scores 0.5, 0.8, 1.0 in one case | Only the 1.0 score cell bold |
+| UT-038 | REQ-028 | test_markdown_report_bolds_best_total_tokens | 3 PASS trials with total_tokens 100, 200, 300 in one case | Only the 100 cell bold |
+| UT-039 | REQ-028 | test_markdown_report_bolds_best_tool_call_count | 3 PASS trials with tool_call_count 1, 3, 5 in one case | Only the 1 cell bold |
+| UT-040 | REQ-028 | test_markdown_report_bolds_all_tied_cells | 2 PASS trials sharing min duration=1.0s | Both 1.0s cells bold |
+| UT-041 | REQ-029 | test_markdown_report_status_icons_mapped | Parametrized: each of EXCELLENT/PASS/FAIL/TIMEOUT/ERROR | Status text begins with the icon: 👍/✅/❌/⏱️/⚠️ followed by the status name |
+| UT-042 | REQ-025 | test_markdown_report_deterministic_byte_identical | Same `results.json` rendered twice | Both renderings produce byte-identical bytes |
 
 ## Integration Tests
 
@@ -47,6 +58,7 @@
 | IT-003 | Parallelism | test_parallel_execution | Run 8 cells with parallelism=4 | Total wall-clock < 3× single-trial latency (confirms concurrency) |
 | IT-004 | Validator protocol | test_custom_validator_executed | Test case with validator.py returning ValidationResult(status=EXCELLENT, score=0.95, details=[]) | results.json has verification_result with score=0.95 |
 | IT-005 | TrialRunner + filesystem | test_isolation_end_to_end | Real (mocked) subprocess that lists its `cwd` to stdout; test case has `workdir/data.txt` + `validator.py` + `instruction.txt` | Captured stdout reports `cwd` listing contains `data.txt` only; no `stdout.log`, no `history`, no `validator.py`, no `instruction.txt` |
+| IT-006 | MarkdownReporter end-to-end | test_report_md_full_pipeline_sort_bold_icons | Run a small experiment (2 models × 2 cases × 2 trials, mix of statuses); inspect `report.md` | Rows sorted; best-PASS cells bold per test case; status column contains icons; no HTML present |
 
 ## End-to-End Tests
 
@@ -55,6 +67,7 @@
 | E2E-001 | US-001 | Full experiment run | 1. Create 2 test case dirs with validators; 2. Run `zrb-llm-evaluator run --models m1,m2 --test-cases ./cases/ --trials 2 --output-dir ./exp`; 3. Inspect ./exp | results.json has 8 entries; report.md and results.json exist; all entries have terminal status |
 | E2E-002 | US-003 | Timeout preserves history | 1. Create a test case with a long-running instruction; 2. Run with --timeout 5; 3. Check logs | Trial has TIMEOUT status; history JSON file exists on disk |
 | E2E-003 | US-007 | Resume after Ctrl+C | 1. Start experiment with 4 cells; 2. Kill after cell 2; 3. Re-run with same output dir | Cells 1-2 skipped; cells 3-4 execute; final results.json has 4 entries |
+| E2E-004 | US-009 | Scannable report after a run | 1. Run a full experiment with mixed statuses; 2. Open `report.md` | Rows ordered by model→case→trial; per-test-case best `duration`/`score`/`total_tokens`/`tool_call_count` cells bold; status icons render for all five statuses |
 
 ## Property-Based Tests
 
@@ -64,10 +77,10 @@ N/A — no property-testing framework configured.
 
 | Property | Covered By | Notes |
 |----------|------------|-------|
-| Round-Trip | UT-020, UT-022, UT-023 | Pydantic serialization/deserialization verified via results.json write + token field defaults |
+| Round-Trip | UT-020, UT-022, UT-023, UT-042 | Pydantic serialization/deserialization verified via results.json write + token field defaults; report rendering is deterministic byte-identical across runs |
 | Uniqueness | UT-001, UT-018 | Session name uniqueness + output dir hierarchy enforcement |
 | Atomicity | UT-020 | Atomic write via temp file + os.rename; results.json always valid JSON |
-| Validation | UT-013, UT-015, UT-016, UT-017, UT-018, UT-029, UT-030, UT-031 | Config validation (model format, required args) + test case import rejection + per-trial filesystem layout invariants |
+| Validation | UT-013, UT-015, UT-016, UT-017, UT-018, UT-029, UT-030, UT-031, UT-035 | Config validation (model format, required args) + test case import rejection + per-trial filesystem layout invariants + report output is pure Markdown (no HTML) |
 | Idempotency | UT-006, IT-002 | Resume skips terminal cells; re-run produces identical results |
 
 ## Test Data Strategy

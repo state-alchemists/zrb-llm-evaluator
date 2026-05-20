@@ -8,6 +8,9 @@
 - `REQ-003` (from AC-007): ALWAYS SHALL completed trial results persist to disk before the next trial begins.
 - `REQ-020` (from AC-008): ALWAYS SHALL the trial subprocess `cwd` be a nested `workdir/` directory inside the per-trial cell directory — never the cell directory itself.
 - `REQ-021` (from AC-008): ALWAYS SHALL the trial's `stdout.log`, `history/` directory, and any other evaluation artifacts live as siblings of `workdir/` and not inside it.
+- `REQ-025` (from AC-010): ALWAYS SHALL trial rows in `report.md` be sorted by `model` ascending, then `test_case` ascending, then `trial_index` ascending.
+- `REQ-026` (from AC-011): ALWAYS SHALL the best-metric bolding scope be one test case (spanning all models and all trials in that test case), and ALWAYS SHALL trials with status `FAIL`, `TIMEOUT`, or `ERROR` be excluded from the best-metric computation.
+- `REQ-027` (from AC-012): ALWAYS SHALL `report.md` use pure Markdown syntax — no embedded HTML — for sort order, bolding, and status icons.
 
 ### Event-Driven (WHEN/THEN SHALL)
 - `REQ-004` (from AC-001): WHEN the user invokes `run` THEN SHALL the framework iterate every model × test case × trial combination.
@@ -19,11 +22,13 @@
 ### State-Driven (WHERE/THEN SHALL)
 - `REQ-008` (from AC-003): WHERE a trial is in TIMEOUT or ERROR state THEN SHALL the partial LLM history file on disk still be referenced in the result.
 - `REQ-009` (from AC-002): WHERE a trial completed with a valid output THEN SHALL the test case's validator be invoked with the output directory and log content.
+- `REQ-028` (from AC-011): WHERE a trial with status `PASS` or `EXCELLENT` ties or sets the best value within its test case for any of (`duration` min, `score` max, `total_tokens` min, `tool_call_count` min) THEN SHALL the corresponding metric cell in `report.md` be wrapped in Markdown bold (`**…**`).
 
 ### Conditional (AS/THEN SHALL)
 - `REQ-010` (from AC-006): AS parallelism is greater than 1 THEN SHALL trials be dispatched across concurrent async tasks gated by a semaphore.
 - `REQ-011` (from AC-002): AS a validator raises an exception THEN SHALL the trial be recorded as ERROR with the exception message in details.
 - `REQ-012` (from AC-004): AS `--cli-name` is provided THEN SHALL the runner invoke that binary instead of `zrb`.
+- `REQ-029` (from AC-012): AS a trial's status is rendered in `report.md` THEN SHALL the status text be prefixed with the icon mapping: `EXCELLENT` → 👍, `PASS` → ✅, `FAIL` → ❌, `TIMEOUT` → ⏱️, `ERROR` → ⚠️.
 
 ### Exception (UNLESS/THEN SHALL)
 - `REQ-013` (from AC-002): UNLESS a test case directory contains a valid validator module THEN SHALL the runner reject that test case with a clear error message.

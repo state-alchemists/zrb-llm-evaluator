@@ -68,6 +68,7 @@ The evaluator orchestrates multiple `zrb chat` subprocess invocations in paralle
 | ADR-5 | Protocol-Based Validator Contract | Accepted |
 | ADR-6 | Filesystem-Based Experiment State with JSON Resume | Accepted |
 | ADR-7 | Trial Subprocess Isolation via Nested Workdir | Accepted |
+| ADR-8 | Markdown Report Rendering Conventions | Accepted |
 
 ## Data Flow
 
