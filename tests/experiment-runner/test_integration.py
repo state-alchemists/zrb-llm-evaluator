@@ -54,7 +54,8 @@ class TestRunCommandFullPipeline:
         test_cases = load_test_cases([cases_dir / "case-a", cases_dir / "case-b"])
         output_dir = tmp_path / "out"
 
-        results = await run_experiment(config, test_cases, output_dir)
+        experiment = await run_experiment(config, test_cases, output_dir)
+        results = experiment.results
 
         # Verify 8 entries (2 models x 2 cases x 2 trials)
         assert len(results) == 8
@@ -69,6 +70,12 @@ class TestRunCommandFullPipeline:
         assert results_json.exists()
         data = json.loads(results_json.read_text(encoding="utf-8"))
         assert len(data) == 8
+
+        # experiment.json envelope should also be persisted
+        experiment_json = output_dir / "experiment.json"
+        assert experiment_json.exists()
+        assert experiment.completed_at is not None
+        assert experiment.started_at != ""
 
 
 class TestResumeMidExperiment:
@@ -108,12 +115,15 @@ class TestResumeMidExperiment:
         )
 
         # First run: should produce all 4 cells
-        results1 = await run_experiment(config, test_cases, output_dir)
-        assert len(results1) == 4
+        experiment1 = await run_experiment(config, test_cases, output_dir)
+        assert len(experiment1.results) == 4
 
         # Second run with same output dir: should skip all completed cells
-        results2 = await run_experiment(config, test_cases, output_dir)
-        assert len(results2) == 4  # Still 4 total
+        # and preserve the experiment id + started_at from the first run.
+        experiment2 = await run_experiment(config, test_cases, output_dir)
+        assert len(experiment2.results) == 4  # Still 4 total
+        assert experiment2.id == experiment1.id
+        assert experiment2.started_at == experiment1.started_at
 
         # Verify the JSON has exactly 4 entries (no duplicates)
         results_json = output_dir / "results.json"
@@ -159,10 +169,10 @@ class TestParallelExecution:
 
         import time
         start = time.monotonic()
-        results = await run_experiment(config, test_cases, output_dir)
+        experiment = await run_experiment(config, test_cases, output_dir)
         elapsed = time.monotonic() - start
 
-        assert len(results) == 8
+        assert len(experiment.results) == 8
         # With parallelism=4 and echo being instant, should be fast
         assert elapsed < 5.0, f"Parallel run took {elapsed:.2f}s"
 
@@ -203,10 +213,10 @@ class TestCustomValidatorExecuted:
         test_cases = load_test_cases([case_dir])
         output_dir = tmp_path / "out-validator"
 
-        results = await run_experiment(config, test_cases, output_dir)
+        experiment = await run_experiment(config, test_cases, output_dir)
 
-        assert len(results) == 1
-        r = results[0]
+        assert len(experiment.results) == 1
+        r = experiment.results[0]
         assert r.verification_result is not None
         assert r.verification_result.status == "EXCELLENT"
         assert r.verification_result.score == 0.95
@@ -251,7 +261,8 @@ class TestStress100Cells:
         test_cases = load_test_cases([case_dir])
         output_dir = tmp_path / "out-stress"
 
-        results = await run_experiment(config, test_cases, output_dir)
+        experiment = await run_experiment(config, test_cases, output_dir)
+        results = experiment.results
 
         assert len(results) == 100
         terminal_statuses = {"EXCELLENT", "PASS", "FAIL", "TIMEOUT", "ERROR"}

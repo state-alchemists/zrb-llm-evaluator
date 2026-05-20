@@ -65,7 +65,7 @@ def run(
     # Load test cases (validates validator protocol at load time)
     resolved_dirs = [p.resolve() for p in config.test_case_dirs]
     try:
-        test_cases = load_test_cases(resolved_dirs)
+        loaded_cases = load_test_cases(resolved_dirs)
     except ValueError as exc:
         typer.echo(f"Test case error: {exc}", err=True)
         raise typer.Exit(code=1)
@@ -73,24 +73,26 @@ def run(
     out_path = Path(output_dir).resolve()
     typer.echo(
         f"Running experiment: {len(model_list)} models x "
-        f"{len(test_cases)} cases x {trials} trials"
+        f"{len(loaded_cases)} cases x {trials} trials"
     )
     typer.echo(f"Output directory: {out_path}")
 
     # Run
     import asyncio
 
-    results = asyncio.run(run_experiment(config, test_cases, out_path))
+    experiment = asyncio.run(run_experiment(config, loaded_cases, out_path))
 
     # Generate reports
-    results_path = out_path / "results.json"
-    generate_json_report(results, results_path)
+    experiment_path = out_path / "experiment.json"
+    generate_json_report(experiment, experiment_path)
     report_path = out_path / "report.md"
-    generate_markdown_report(results, report_path)
+    generate_markdown_report(experiment, report_path)
 
-    typer.echo(f"Done. {len(results)} trials completed.")
-    typer.echo(f"Results: {results_path}")
-    typer.echo(f"Report:  {report_path}")
+    results_path = out_path / "results.json"
+    typer.echo(f"Done. {len(experiment.results)} trials completed.")
+    typer.echo(f"Results:    {results_path}")
+    typer.echo(f"Experiment: {experiment_path}")
+    typer.echo(f"Report:     {report_path}")
 
 
 # @sdlc REQ-017
@@ -126,18 +128,19 @@ def list(
 def report(
     dir: str = typer.Option("./out", "--dir", help="Output directory with results"),
 ) -> None:
-    """Re-generate the Markdown report from existing results."""
-    results_path = Path(dir) / "results.json"
-    if not results_path.is_file():
-        typer.echo(f"No results found at {results_path}", err=True)
-        raise typer.Exit(code=1)
-
+    """Re-generate the Markdown report from an existing experiment envelope."""
     import json
 
-    data = json.loads(results_path.read_text(encoding="utf-8"))
-    from zrb_llm_evaluator.models import TrialResult
+    from zrb_llm_evaluator.models import Experiment
 
-    results = [TrialResult.model_validate(item) for item in data]
+    experiment_path = Path(dir) / "experiment.json"
+    if not experiment_path.is_file():
+        typer.echo(f"No experiment.json found in {dir}", err=True)
+        raise typer.Exit(code=1)
+
+    data = json.loads(experiment_path.read_text(encoding="utf-8"))
+    experiment = Experiment.model_validate(data)
+
     report_path = Path(dir) / "report.md"
-    generate_markdown_report(results, report_path)
+    generate_markdown_report(experiment, report_path)
     typer.echo(f"Report generated: {report_path}")

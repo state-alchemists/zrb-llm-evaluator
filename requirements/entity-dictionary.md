@@ -59,11 +59,14 @@
 | duration | float | Required | Wall-clock duration in seconds |
 | exit_code | int | Required | zrb subprocess exit code |
 | log_path | str | Required | Path to the saved LLM conversation history |
+| stdout_log_path | str | — | Path to the raw subprocess stdout/stderr log on disk |
 | verification_result | ValidationResult | — | The typed output from the test case's validator |
 | total_tokens | int | — | Token count from cost summary line |
 | input_tokens | int | — | Input tokens |
 | output_tokens | int | — | Output tokens |
 | cache_read_tokens | int | — | Cache read tokens |
+| tool_calls | list[str] | — | Ordered list of tool names invoked during the trial |
+| tool_call_count | int | — | Length of `tool_calls`; convenience aggregate |
 
 ### Report
 | Field | Type | Constraints | Description |

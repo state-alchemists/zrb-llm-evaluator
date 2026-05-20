@@ -153,7 +153,7 @@ The runner has four layers:
 
 1. **CLI** (`cli.py`) — Typer entry point, parses args, validates config
 2. **Loader** (`loader.py`) — Discovers test cases from directories, imports validators, checks protocol conformance
-3. **Runner** (`runner.py`) — Async subprocess orchestration with `asyncio.Semaphore`, `asyncio.wait_for`, and `ResumeManager` for idempotent resumption. Each trial creates an isolated directory `{output}/{model}/{test_case}/trial-{N}/` with its own history directory
+3. **Runner** (`runner.py`) — Async subprocess orchestration with `asyncio.Semaphore`, `asyncio.wait_for`, and `ResumeManager` for idempotent resumption. Each trial creates an isolated directory `{output}/{model_safe}/{test_case}/trial-{N}/` (colons in the model name are sanitized) with its own history directory
 4. **Reporter** (`reporter.py`) — Generates Markdown and JSON output with atomic file writes
 
 Key design decisions are documented in `docs/adr/`.
@@ -167,7 +167,7 @@ Key design decisions are documented in `docs/adr/`.
 ├── openai_gpt-4o/
 │   └── bug-fix/
 │       ├── trial-1/
-│       │   ├── chat.log              # Raw conversation log
+│       │   ├── stdout.log            # Raw subprocess stdout/stderr
 │       │   └── history/              # ZRB_LLM_HISTORY_DIR
 │       │       └── <session>.json
 │       ├── trial-2/
