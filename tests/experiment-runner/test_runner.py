@@ -108,11 +108,14 @@ class TestTrialRunner:
         )
         output_dir = tmp_path / "out"
 
-        # Monkey-patch create_subprocess_exec to return a slow mock
+        # Mock proc.wait to raise asyncio.TimeoutError so the runner's
+        # `except asyncio.TimeoutError` branch fires (matches the runner's
+        # `await asyncio.wait_for(proc.wait(), ...)` control flow).
         mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError)
+        # First wait() raises TimeoutError (drives the timeout branch);
+        # second wait() (called after proc.kill() to reap) returns cleanly.
+        mock_proc.wait = AsyncMock(side_effect=[asyncio.TimeoutError, 0])
         mock_proc.kill = Mock()
-        mock_proc.wait = AsyncMock(return_value=0)
 
         async def mock_create_subprocess_exec(*args: object, **kwargs: object) -> AsyncMock:
             return mock_proc
@@ -165,14 +168,22 @@ class TestTrialRunner:
         )
         output_dir = tmp_path / "out"
 
-        stdout = "Some output\nVERIFICATION_RESULT: PASS\nDone.\n"
+        stdout_bytes = b"Some output\nVERIFICATION_RESULT: PASS\nDone.\n"
         mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(
-            return_value=(stdout.encode("utf-8"), b"")
-        )
+        mock_proc.wait = AsyncMock(return_value=1)
         mock_proc.returncode = 1
 
-        with patch.object(asyncio, "create_subprocess_exec", _mock_subprocess(mock_proc)):
+        # Runner streams subprocess stdout directly to disk via `stdout=log_file`;
+        # the mock has to write the verification marker into that file so the
+        # runner can read it back from log_path.
+        async def writing_create(*args: object, **kwargs: object) -> AsyncMock:
+            log_file = kwargs.get("stdout")
+            if log_file is not None:
+                log_file.write(stdout_bytes)
+                log_file.flush()
+            return mock_proc
+
+        with patch.object(asyncio, "create_subprocess_exec", writing_create):
             runner = TrialRunner(config, sample_test_case, output_dir)
             result = await runner.run("openai:gpt-4o", 1)
 
@@ -524,10 +535,13 @@ class TestRunnerValidatorIntegration:
         )
         output_dir = tmp_path / "out"
 
+        # Mock proc.wait to raise asyncio.TimeoutError to drive the runner's
+        # timeout branch (runner uses `await asyncio.wait_for(proc.wait(), ...)`).
         mock_proc = AsyncMock()
-        mock_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError)
+        # First wait() raises TimeoutError (drives the timeout branch);
+        # second wait() (called after proc.kill() to reap) returns cleanly.
+        mock_proc.wait = AsyncMock(side_effect=[asyncio.TimeoutError, 0])
         mock_proc.kill = Mock()
-        mock_proc.wait = AsyncMock(return_value=0)
 
         async def mock_create_subprocess_exec(*args: object, **kwargs: object) -> AsyncMock:
             return mock_proc

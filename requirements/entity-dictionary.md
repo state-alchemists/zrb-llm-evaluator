@@ -26,7 +26,7 @@
 |-------|------|-------------|-------------|
 | name | str | Required, unique within experiment | Directory name of the test case |
 | instruction | str | Required | The prompt/instruction sent to the LLM |
-| workdir | Path | Required | Initial files copied into the trial's working directory |
+| workdir | Path | Required | Source path for files staged into the trial's working directory; may not exist on disk (treated as an empty source). |
 | validator | Validator | Required | The typed validation logic for this test case |
 
 ### Validator

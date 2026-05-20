@@ -32,6 +32,11 @@
 | UT-024 | NFR-001 | test_overhead_without_llm | mock subprocess returning instantly | Wall-clock overhead < 2s |
 | UT-025 | RULE-005 | test_no_zrb_import_in_runner | runner module | No `import zrb` or `from zrb` outside test fixtures |
 | UT-026 | REQ-019 | test_tool_calls_extracted_from_history | zrb history JSON with tool-use entries | tool_calls list and tool_call_count populated; defensive on parse errors |
+| UT-027 | REQ-020 | test_subprocess_cwd_is_nested_workdir | trial run with mock subprocess | `asyncio.create_subprocess_exec` called with `cwd` ending in `/workdir` (not the cell dir itself) |
+| UT-028 | REQ-021 | test_evaluation_artifacts_outside_workdir | completed trial cell | `cell_dir/stdout.log` exists; `cell_dir/history/` exists; `cell_dir/workdir/stdout.log` does NOT exist; `cell_dir/workdir/history/` does NOT exist |
+| UT-029 | REQ-022 | test_empty_workdir_created_when_no_source | test case with no `workdir/` to stage | `cell_dir/workdir/` exists and is an empty directory before subprocess launch |
+| UT-030 | REQ-023 | test_staged_files_land_in_nested_workdir | test case with workdir containing `seed.txt`, `data/notes.md` | `cell_dir/workdir/seed.txt` and `cell_dir/workdir/data/notes.md` exist; `cell_dir/seed.txt` does NOT exist |
+| UT-031 | REQ-024 | test_metadata_files_never_staged | test case directory containing `validator.py`, `instruction.txt`, and a `workdir/` with `foo.txt` | `cell_dir/workdir/foo.txt` exists; `cell_dir/workdir/validator.py` does NOT exist; `cell_dir/workdir/instruction.txt` does NOT exist |
 
 ## Integration Tests
 
@@ -41,6 +46,7 @@
 | IT-002 | Resume | test_resume_mid_experiment | Run 2 models × 1 case × 2 trials; interrupt after cell 3; restart | Only cell 4 executes; results.json has 4 entries |
 | IT-003 | Parallelism | test_parallel_execution | Run 8 cells with parallelism=4 | Total wall-clock < 3× single-trial latency (confirms concurrency) |
 | IT-004 | Validator protocol | test_custom_validator_executed | Test case with validator.py returning ValidationResult(status=EXCELLENT, score=0.95, details=[]) | results.json has verification_result with score=0.95 |
+| IT-005 | TrialRunner + filesystem | test_isolation_end_to_end | Real (mocked) subprocess that lists its `cwd` to stdout; test case has `workdir/data.txt` + `validator.py` + `instruction.txt` | Captured stdout reports `cwd` listing contains `data.txt` only; no `stdout.log`, no `history`, no `validator.py`, no `instruction.txt` |
 
 ## End-to-End Tests
 
@@ -61,7 +67,7 @@ N/A — no property-testing framework configured.
 | Round-Trip | UT-020, UT-022, UT-023 | Pydantic serialization/deserialization verified via results.json write + token field defaults |
 | Uniqueness | UT-001, UT-018 | Session name uniqueness + output dir hierarchy enforcement |
 | Atomicity | UT-020 | Atomic write via temp file + os.rename; results.json always valid JSON |
-| Validation | UT-013, UT-015, UT-016, UT-017, UT-018 | Config validation (model format, required args) + test case import rejection |
+| Validation | UT-013, UT-015, UT-016, UT-017, UT-018, UT-029, UT-030, UT-031 | Config validation (model format, required args) + test case import rejection + per-trial filesystem layout invariants |
 | Idempotency | UT-006, IT-002 | Resume skips terminal cells; re-run produces identical results |
 
 ## Test Data Strategy

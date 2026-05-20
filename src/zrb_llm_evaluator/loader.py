@@ -1,5 +1,5 @@
 # GENERATED FROM SPEC: specs/experiment-runner/requirements.md
-# IMPLEMENTS: REQ-013, REQ-015, RULE-001, RULE-004
+# IMPLEMENTS: REQ-013, REQ-015, REQ-024, RULE-001, RULE-004
 
 """Test case discovery, loading, and validation."""
 
@@ -15,14 +15,16 @@ from pydantic import BaseModel, ConfigDict
 from zrb_llm_evaluator.protocols import ValidatorProtocol
 
 
-# @sdlc REQ-013, RULE-001, RULE-003
+# @sdlc REQ-013, REQ-024, RULE-001, RULE-003
 class TestCase(BaseModel):
     """A loaded test case with instruction, workdir, and validator.
 
-    ``workdir`` is required by the entity dictionary; when a test case
-    directory has no ``workdir/`` subdirectory, the loader sets ``workdir``
-    to the test case directory itself (the LLM then runs against the case
-    files in place).
+    ``workdir`` is the path the runner stages into the trial's nested
+    workdir. It always points to ``{test_case_dir}/workdir`` — whether or
+    not that directory exists. When it doesn't exist, the runner stages
+    nothing and the LLM sees an empty workdir (per REQ-022 / REQ-024,
+    test-case metadata like ``validator.py`` and ``instruction.txt`` must
+    never reach the subprocess cwd).
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -67,10 +69,12 @@ def load_test_case(test_case_dir: Path) -> TestCase:
         raise ValueError(msg)
     instruction = instruction_path.read_text(encoding="utf-8")
 
-    # Discover workdir; fall back to the test-case directory itself so the
-    # entity contract (workdir Required) is honored without surprising the user.
-    workdir_path = test_case_dir / "workdir"
-    workdir: Path = workdir_path if workdir_path.is_dir() else test_case_dir
+    # workdir is the staging source — always {test_case_dir}/workdir.
+    # If it doesn't exist, the runner creates an empty nested workdir
+    # instead of staging anything (REQ-022). Never falls back to
+    # test_case_dir itself, which would expose validator.py /
+    # instruction.txt to the LLM (REQ-024).
+    workdir: Path = test_case_dir / "workdir"
 
     # Load and validate validator module
     validator_path = test_case_dir / "validator.py"

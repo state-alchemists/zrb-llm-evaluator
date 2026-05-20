@@ -70,7 +70,7 @@ class ExperimentConfig(BaseModel):
     @classmethod
     def _validate_model_format(cls, v: list[str]) -> list[str]:
         """Each model must be in provider:name format."""
-        pattern = re.compile(r"^[a-zA-Z0-9_]+:[a-zA-Z0-9_./-]+$")
+        pattern = re.compile(r"^[a-zA-Z0-9_-]+:[a-zA-Z0-9_./-]+$")
         for model in v:
             if not pattern.match(model):
                 msg = f"Model {model!r} must be in 'provider:name' format (e.g. 'openai:gpt-4o')"

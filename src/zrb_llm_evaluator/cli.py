@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import logging
+import sys
 from pathlib import Path
 
 import typer
@@ -18,6 +20,19 @@ app = typer.Typer(
     name="zrb-llm-evaluator",
     help="Multi-trial experiment runner for zrb chat",
 )
+
+
+def _setup_logging() -> None:
+    """Configure stderr progress logging for the runner package."""
+    pkg_logger = logging.getLogger("zrb_llm_evaluator")
+    if pkg_logger.handlers:
+        return
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(
+        logging.Formatter("[%(asctime)s] %(message)s", datefmt="%H:%M:%S"),
+    )
+    pkg_logger.addHandler(handler)
+    pkg_logger.setLevel(logging.INFO)
 
 
 # @sdlc REQ-004, REQ-014, REQ-015, REQ-016
@@ -44,6 +59,7 @@ def run(
     ),
 ) -> None:
     """Run a full experiment: N models x M test cases x T trials."""
+    _setup_logging()
     # Parse models
     model_list = [m.strip() for m in models.split(",") if m.strip()]
     case_paths = [Path(p.strip()) for p in test_cases.split(",") if p.strip()]

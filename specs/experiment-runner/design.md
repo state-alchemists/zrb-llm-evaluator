@@ -9,7 +9,7 @@ All result models (`TrialResult`, `ValidationResult`, `ValidationCheck`) are Pyd
 Each trial cell is identified by the triple `(model, test_case, trial_index)`. This triple must be unique within an experiment. The output directory hierarchy enforces this: `{output_dir}/{model_safe}/{test_case}/trial-{N}` maps exactly to one cell. On resume, cells are deduplicated by this triple using a dictionary key.
 
 ### Atomicity
-Each trial result is appended to `results.json` atomically: write to a temp file, then `os.rename()` — which is atomic on the same filesystem. If the process crashes mid-trial, the partial `results.json` (missing only the in-flight trial) is valid JSON. Unused workdirs from interrupted trials are cleaned up on resume.
+Each trial result is appended to `results.json` atomically: write to a temp file, then `os.rename()` — which is atomic on the same filesystem. If the process crashes mid-trial, the partial `results.json` (missing only the in-flight trial) is valid JSON. Unused cell directories from interrupted trials are removed and recreated on retry — including their nested `workdir/` — so the retry starts from a pristine staged workdir rather than overlaying onto stale LLM artifacts.
 
 ### Validation
 `ExperimentConfig` is a Pydantic model validated at CLI entry:
@@ -46,6 +46,35 @@ The primary interface is a CLI with subcommands:
 | Validator raised exception | `VALIDATOR_ERROR` | Trial: ERROR with exception message | Fix validator, resume |
 | results.json write failure | `WRITE_ERROR` | Runner exits with partial results | Fix filesystem, resume (skips completed cells) |
 | Ctrl+C / SIGINT | — | In-progress trials are killed; results.json is consistent (mid-write cell may be partial) | Resume skips completed cells, retries in-progress ones |
+
+## Per-Trial Filesystem Layout
+
+Each trial cell uses this layout to keep evaluation artifacts out of the
+LLM's view (per ADR-7):
+
+```
+{output_dir}/{model_safe}/{test_case}/trial-{N}/
+├── workdir/         ← subprocess cwd (LLM-visible)
+│   └── (staged test-case workdir files only)
+├── stdout.log       ← LLM-invisible (sibling of workdir)
+└── history/         ← LLM-invisible (sibling of workdir)
+    └── {session_name}.json
+```
+
+Invariants enforced by REQ-020 / REQ-021 / REQ-022 / REQ-023 / REQ-024:
+- The subprocess `cwd` is always `trial-{N}/workdir/`, even when the test
+  case has no files to stage (an empty `workdir/` is created).
+- `stdout.log`, `history/`, `experiment.json`, and any future evaluation
+  artifacts are siblings of `workdir/`, never children.
+- Test-case metadata (`validator.py`, `instruction.txt`) is never copied
+  into `workdir/`. Only the test case's own `workdir/` contents are staged.
+
+`..` traversal from inside `workdir/` reaches the evaluation files —
+this is accepted per ADR-7's threat model (honest LLM, not adversarial).
+
+The `ZRB_LLM_HISTORY_DIR` env var is set to the trial's `history/`
+directory (a sibling of `workdir/`), so zrb writes the conversation
+history outside the LLM's `cwd`.
 
 ## Data Model
 

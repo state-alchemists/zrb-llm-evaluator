@@ -6,12 +6,15 @@
 - `REQ-001` (from AC-003): ALWAYS SHALL each trial generate a unique session name that survives timeout.
 - `REQ-002` (from AC-006): ALWAYS SHALL the number of concurrent subprocesses not exceed the configured parallelism.
 - `REQ-003` (from AC-007): ALWAYS SHALL completed trial results persist to disk before the next trial begins.
+- `REQ-020` (from AC-008): ALWAYS SHALL the trial subprocess `cwd` be a nested `workdir/` directory inside the per-trial cell directory — never the cell directory itself.
+- `REQ-021` (from AC-008): ALWAYS SHALL the trial's `stdout.log`, `history/` directory, and any other evaluation artifacts live as siblings of `workdir/` and not inside it.
 
 ### Event-Driven (WHEN/THEN SHALL)
 - `REQ-004` (from AC-001): WHEN the user invokes `run` THEN SHALL the framework iterate every model × test case × trial combination.
 - `REQ-005` (from AC-006): WHEN a trial exceeds the configured timeout THEN SHALL the subprocess be killed and the trial recorded as TIMEOUT.
 - `REQ-006` (from AC-007): WHEN the framework starts and finds an existing `results.json` THEN SHALL it load the file and skip all cells with a terminal status.
 - `REQ-007`: WHEN a subprocess returns a non-zero exit code THEN SHALL the trial be recorded as ERROR unless a verification marker overrides it.
+- `REQ-022` (from AC-009): WHEN a test case has no dedicated `workdir/` source to stage THEN SHALL the runner create an empty `workdir/` directory inside the trial cell before launching the subprocess.
 
 ### State-Driven (WHERE/THEN SHALL)
 - `REQ-008` (from AC-003): WHERE a trial is in TIMEOUT or ERROR state THEN SHALL the partial LLM history file on disk still be referenced in the result.
@@ -32,6 +35,8 @@
 - `REQ-017` (from AC-005): The runner SHALL write each completed `TrialResult` to `results.json` immediately upon finishing.
 - `REQ-018` (from AC-001): The runner SHALL create a per-cell output directory: `{output_dir}/{model_safe}/{test_case}/trial-{N}/`.
 - `REQ-019`: The runner SHALL parse the cost summary line from subprocess stdout and populate token fields in `TrialResult`.
+- `REQ-023` (from AC-008): The runner SHALL stage the test case's `workdir/` contents into the trial's nested `workdir/` directory, never into the cell directory itself.
+- `REQ-024` (from AC-008): The runner SHALL ensure that `validator.py`, `instruction.txt`, and any other test-case metadata files are never copied into the trial's `workdir/`.
 
 ## Non-Functional Requirements
 | ID | Requirement | Target | Validated By |

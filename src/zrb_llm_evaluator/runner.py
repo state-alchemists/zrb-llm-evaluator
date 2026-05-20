@@ -1,6 +1,7 @@
 # GENERATED FROM SPEC: specs/experiment-runner/requirements.md
 # IMPLEMENTS: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008,
 #    REQ-009, REQ-010, REQ-011, REQ-012, REQ-016, REQ-017, REQ-018, REQ-019,
+#    REQ-020, REQ-021, REQ-022, REQ-023, REQ-024,
 #    NFR-001, NFR-002, RULE-005, RULE-012
 
 """Async experiment runner with subprocess orchestration."""
@@ -9,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -30,6 +32,9 @@ from zrb_llm_evaluator.models import (
     ValidationCheck,
     ValidationResult,
 )
+
+logger = logging.getLogger(__name__)
+
 
 # Terminal statuses — cells with these statuses are skipped on resume.
 TERMINAL_STATUSES: set[str] = {
@@ -196,7 +201,7 @@ class ResumeManager:
 # Per-trial runner
 # ---------------------------------------------------------------------------
 
-# @sdlc REQ-001, REQ-005, REQ-012, REQ-016, REQ-018
+# @sdlc REQ-001, REQ-005, REQ-012, REQ-016, REQ-018, REQ-020, REQ-021, REQ-022, REQ-023, REQ-024
 class TrialRunner:
     """Executes a single trial as a subprocess."""
 
@@ -219,7 +224,7 @@ class TrialRunner:
         self._test_case = test_case
         self._output_dir = output_dir
 
-    # @sdlc REQ-001, REQ-005, REQ-016, REQ-018, REQ-019
+    # @sdlc REQ-001, REQ-005, REQ-016, REQ-018, REQ-019, REQ-020, REQ-021, REQ-022, REQ-023, REQ-024
     async def run(self, model: str, trial_index: int) -> TrialResult:
         """Run a single trial.
 
@@ -243,13 +248,22 @@ class TrialRunner:
             shutil.rmtree(cell_dir)
         cell_dir.mkdir(parents=True, exist_ok=True)
 
-        # Stage the test case's workdir into the trial cwd so the LLM sees
-        # the scaffolding files. Done per-trial for isolation. When the
-        # loader fell back to the test-case directory itself (no dedicated
-        # ``workdir/`` subdir), we skip staging to avoid copying
-        # ``validator.py`` / ``instruction.txt`` into the LLM's cwd.
-        if self._test_case.workdir.name == "workdir":
-            shutil.copytree(self._test_case.workdir, cell_dir, dirs_exist_ok=True)
+        # Nested workdir is the subprocess cwd; evaluation artifacts
+        # (stdout.log, history/) live as siblings in cell_dir and are
+        # invisible to the LLM (per ADR-7 / REQ-020 / REQ-021).
+        nested_workdir = cell_dir / "workdir"
+        nested_workdir.mkdir(parents=True, exist_ok=True)
+
+        # Stage the test case's workdir contents into the nested workdir
+        # only when the source directory actually exists. Loader always sets
+        # ``self._test_case.workdir`` to ``{test_case_dir}/workdir``; when
+        # that's absent we keep nested_workdir empty (REQ-022). The source
+        # is by construction never the test_case_dir itself, so validator.py
+        # and instruction.txt can never be staged (REQ-024).
+        if self._test_case.workdir.is_dir():
+            shutil.copytree(
+                self._test_case.workdir, nested_workdir, dirs_exist_ok=True,
+            )
 
         session_name = make_session_name(model, self._test_case.name, trial_index)
         history_dir = cell_dir / "history"
@@ -261,57 +275,59 @@ class TrialRunner:
         env["ZRB_LLM_HISTORY_DIR"] = str(history_dir)
 
         start = time.monotonic()
+        # Stream subprocess stdout/stderr directly to disk so partial output
+        # survives a timeout (the runner kills the subprocess on timeout, and
+        # buffered PIPE bytes would otherwise be lost).
         try:
-            proc = await asyncio.create_subprocess_exec(
-                self._config.cli_name,
-                "chat",
-                "--interactive",
-                "false",
-                "--message",
-                self._test_case.instruction,
-                "--session",
-                session_name,
-                cwd=str(cell_dir),
-                env=env,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            with open(log_path, "wb") as log_file:
+                proc = await asyncio.create_subprocess_exec(
+                    self._config.cli_name,
+                    "chat",
+                    "--interactive",
+                    "false",
+                    "--yolo",
+                    "true",
+                    "--message",
+                    self._test_case.instruction,
+                    "--session",
+                    session_name,
+                    cwd=str(nested_workdir),
+                    env=env,
+                    stdout=log_file,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
 
-            try:
-                stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=self._config.timeout,
-                )
-            except asyncio.TimeoutError:
-                proc.kill()
-                await proc.wait()
-                duration = time.monotonic() - start
-                log_path.write_text(
-                    f"[TIMEOUT after {self._config.timeout}s]\n",
-                    encoding="utf-8",
-                )
-                tool_calls, tool_call_count = count_tool_calls_from_history(
-                    history_log_path,
-                )
-                return TrialResult(
-                    model=model,
-                    test_case=self._test_case.name,
-                    trial_index=trial_index,
-                    status="TIMEOUT",
-                    duration=duration,
-                    exit_code=-1,
-                    log_path=str(history_log_path),
-                    stdout_log_path=str(log_path),
-                    tool_calls=tool_calls,
-                    tool_call_count=tool_call_count,
-                )
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=self._config.timeout)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.wait()
+                    log_file.flush()
+                    log_file.write(
+                        f"\n[TIMEOUT after {self._config.timeout}s]\n".encode(
+                            "utf-8",
+                        ),
+                    )
+                    duration = time.monotonic() - start
+                    tool_calls, tool_call_count = count_tool_calls_from_history(
+                        history_log_path,
+                    )
+                    return TrialResult(
+                        model=model,
+                        test_case=self._test_case.name,
+                        trial_index=trial_index,
+                        status="TIMEOUT",
+                        duration=duration,
+                        exit_code=-1,
+                        log_path=str(history_log_path),
+                        stdout_log_path=str(log_path),
+                        tool_calls=tool_calls,
+                        tool_call_count=tool_call_count,
+                    )
 
             duration = time.monotonic() - start
-            stdout = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
-            stderr = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
-
-            full_output = stdout + stderr
-            log_path.write_text(full_output, encoding="utf-8")
+            full_output = log_path.read_text(encoding="utf-8", errors="replace")
+            stdout = full_output  # combined stdout+stderr stream
 
             exit_code = proc.returncode or 0
             status: Literal["EXCELLENT", "PASS", "FAIL", "TIMEOUT", "ERROR"]
@@ -334,7 +350,7 @@ class TrialRunner:
                 try:
                     # @sdlc REQ-009
                     verification_result = self._test_case.validator.validate(
-                        output_dir=cell_dir,
+                        output_dir=nested_workdir,
                         log_content=full_output,
                     )
                     # Validator result determines final status for clean exits
@@ -447,13 +463,45 @@ class WorkSteward:
             if not self._resume_mgr.is_completed(c.model, c.test_case, c.trial_index)
         ]
 
+        total = len(pending_cells)
+        skipped = len(cells) - total
+        if skipped:
+            logger.info(
+                "Resuming: %d cell(s) already completed, %d pending", skipped, total,
+            )
+        else:
+            logger.info(
+                "Planned: %d trial(s) across %d cell(s)", total, len(cells),
+            )
+
+        completed_count = 0
+        count_lock = asyncio.Lock()
+
         async def _run_one(cell: Cell) -> None:
+            nonlocal completed_count
             async with self._semaphore:
+                logger.info(
+                    "START  %s / %s / trial-%d",
+                    cell.model, cell.test_case, cell.trial_index,
+                )
                 test_case = case_map[cell.test_case]
                 runner = TrialRunner(self._config, test_case, self._output_dir)
                 result = await runner.run(cell.model, cell.trial_index)
                 # @sdlc REQ-003, REQ-017
                 self._resume_mgr.append(result)
+                async with count_lock:
+                    completed_count += 1
+                    done = completed_count
+                logger.info(
+                    "DONE   %s / %s / trial-%d status=%s duration=%.1fs (%d/%d)",
+                    cell.model,
+                    cell.test_case,
+                    cell.trial_index,
+                    result.status,
+                    result.duration,
+                    done,
+                    total,
+                )
 
         tasks = [asyncio.create_task(_run_one(c)) for c in pending_cells]
         if tasks:

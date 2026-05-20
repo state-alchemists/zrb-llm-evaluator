@@ -11,6 +11,7 @@ zrb's existing llm-challenges runner evaluates each model × challenge exactly o
 - `US-005`: As a **framework evaluator**, I want **a structured report (Markdown + JSON)** so that **I can compare results across models, test cases, and trials in both human-readable and machine-parseable formats**.
 - `US-006`: As a **zrb maintainer**, I want **configurable parallelism and per-experiment timeout** so that **I can balance execution speed against API rate limits and model latency**.
 - `US-007`: As a **zrb maintainer**, I want **to resume an interrupted experiment** so that **I don't re-run already-completed model × test case cells on restart**.
+- `US-008`: As a **zrb maintainer**, I want **each trial's LLM subprocess to run in an isolated working directory that contains only the staged test-case files** so that **the LLM cannot inspect evaluation artifacts (its own stdout log, conversation history, validator source, prior trial results) that would contaminate the experiment**.
 
 ## Acceptance Criteria
 - [ ] `AC-001` (US-001): User runs `zrb-llm-evaluator run --models m1,m2 --test-cases ./cases/ --trials 3` and the tool executes 3 trials of every model × test case combination.
@@ -20,6 +21,8 @@ zrb's existing llm-challenges runner evaluates each model × challenge exactly o
 - [ ] `AC-005` (US-005): Running an experiment produces `report.md` (Markdown summary table + detailed per-cell results) and `results.json` (structured JSON, resume-compatible).
 - [ ] `AC-006` (US-006): Specifying `--parallelism 8 --timeout 120` runs up to 8 concurrent subprocesses and kills any trial exceeding 120s.
 - [ ] `AC-007` (US-007): If the experiment is interrupted mid-run and restarted with the same output directory, already-completed cells are skipped and only pending cells execute.
+- [ ] `AC-008` (US-008): When a trial runs, the subprocess `cwd` is a dedicated per-trial workdir containing only the staged test-case files; the trial's `stdout.log`, `history/` directory, `validator.py`, and any other evaluation files live in a sibling/parent location and are not present in or reachable as relative siblings of the subprocess `cwd`.
+- [ ] `AC-009` (US-008): A test case with no dedicated `workdir/` to stage still runs with `cwd` pointed at a freshly-created empty directory — never at the cell directory containing the trial's logs and history.
 
 ## Dependencies
 | Dependency | Type | Status |
