@@ -10,24 +10,26 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import tempfile
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
-from zrb_llm_evaluator.cost_parser import parse_cost_summary
+from zrb_llm_evaluator.cost_parser import (
+    count_tool_calls_from_history,
+    parse_cost_summary,
+)
 from zrb_llm_evaluator.loader import TestCase, make_safe_name, make_session_name
 from zrb_llm_evaluator.models import (
+    Experiment,
     ExperimentConfig,
     TrialResult,
     ValidationCheck,
     ValidationResult,
 )
-
-if TYPE_CHECKING:
-    from zrb_llm_evaluator.protocols import ValidatorProtocol  # noqa: F401
-    # type: ignore[valid-type] — @runtime_checkable Protocol validated via isinstance at runtime
 
 # Terminal statuses — cells with these statuses are skipped on resume.
 TERMINAL_STATUSES: set[str] = {
@@ -118,7 +120,7 @@ class ResumeManager:
             self._result_map.clear()
             return []
 
-        data: list[dict] = json.loads(raw)
+        data: list[dict[str, object]] = json.loads(raw)
         self._results = [TrialResult.model_validate(item) for item in data]
         for r in self._results:
             key = (r.model, r.test_case, r.trial_index)
@@ -179,7 +181,7 @@ class ResumeManager:
             os.close(fd)
             tmp = Path(tmp_path)
             tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            os.rename(str(tmp), str(self._results_path))
+            os.replace(str(tmp), str(self._results_path))
         finally:
             if tmp is not None and tmp.exists():
                 tmp.unlink(missing_ok=True)
@@ -233,13 +235,27 @@ class TrialRunner:
         """
         safe_model = make_safe_name(model)
         cell_dir = self._output_dir / safe_model / self._test_case.name / f"trial-{trial_index}"
+
+        # If cell_dir survived a prior incomplete attempt (interrupted before
+        # the result was appended), wipe it so the retry starts from a pristine
+        # staged workdir rather than overlaying onto stale LLM artifacts.
+        if cell_dir.exists():
+            shutil.rmtree(cell_dir)
         cell_dir.mkdir(parents=True, exist_ok=True)
+
+        # Stage the test case's workdir into the trial cwd so the LLM sees
+        # the scaffolding files. Done per-trial for isolation. When the
+        # loader fell back to the test-case directory itself (no dedicated
+        # ``workdir/`` subdir), we skip staging to avoid copying
+        # ``validator.py`` / ``instruction.txt`` into the LLM's cwd.
+        if self._test_case.workdir.name == "workdir":
+            shutil.copytree(self._test_case.workdir, cell_dir, dirs_exist_ok=True)
 
         session_name = make_session_name(model, self._test_case.name, trial_index)
         history_dir = cell_dir / "history"
         history_dir.mkdir(parents=True, exist_ok=True)
 
-        log_path = cell_dir / "chat.log"
+        log_path = cell_dir / "stdout.log"
         history_log_path = history_dir / f"{session_name}.json"
         env = os.environ.copy()
         env["ZRB_LLM_HISTORY_DIR"] = str(history_dir)
@@ -274,6 +290,9 @@ class TrialRunner:
                     f"[TIMEOUT after {self._config.timeout}s]\n",
                     encoding="utf-8",
                 )
+                tool_calls, tool_call_count = count_tool_calls_from_history(
+                    history_log_path,
+                )
                 return TrialResult(
                     model=model,
                     test_case=self._test_case.name,
@@ -282,6 +301,9 @@ class TrialRunner:
                     duration=duration,
                     exit_code=-1,
                     log_path=str(history_log_path),
+                    stdout_log_path=str(log_path),
+                    tool_calls=tool_calls,
+                    tool_call_count=tool_call_count,
                 )
 
             duration = time.monotonic() - start
@@ -333,6 +355,9 @@ class TrialRunner:
                         ],
                     )
 
+            tool_calls, tool_call_count = count_tool_calls_from_history(
+                history_log_path,
+            )
             return TrialResult(
                 model=model,
                 test_case=self._test_case.name,
@@ -341,16 +366,22 @@ class TrialRunner:
                 duration=duration,
                 exit_code=exit_code,
                 log_path=str(history_log_path),
+                stdout_log_path=str(log_path),
                 verification_result=verification_result,
                 total_tokens=token_fields["total_tokens"],
                 input_tokens=token_fields["input_tokens"],
                 output_tokens=token_fields["output_tokens"],
                 cache_read_tokens=token_fields["cache_read_tokens"],
+                tool_calls=tool_calls,
+                tool_call_count=tool_call_count,
             )
 
         except Exception as exc:
             duration = time.monotonic() - start
             log_path.write_text(f"[ERROR: {exc}]\n", encoding="utf-8")
+            tool_calls, tool_call_count = count_tool_calls_from_history(
+                history_log_path,
+            )
             return TrialResult(
                 model=model,
                 test_case=self._test_case.name,
@@ -359,6 +390,9 @@ class TrialRunner:
                 duration=duration,
                 exit_code=-1,
                 log_path=str(history_log_path),
+                stdout_log_path=str(log_path),
+                tool_calls=tool_calls,
+                tool_call_count=tool_call_count,
             )
 
 
@@ -459,8 +493,13 @@ async def run_experiment(
     config: ExperimentConfig,
     test_cases: list[TestCase],
     output_dir: Path,
-) -> list[TrialResult]:
+) -> Experiment:
     """Run a full experiment: all models x test cases x trials.
+
+    Builds (or resumes) an ``Experiment`` envelope persisted as
+    ``experiment.json`` in ``output_dir``.  On resume, the existing envelope's
+    ``id`` and ``started_at`` are preserved so a single experiment can be
+    rerun without losing its identity.
 
     Args:
     ----
@@ -470,13 +509,70 @@ async def run_experiment(
 
     Returns:
     -------
-        All ``TrialResult`` instances.
+        The completed ``Experiment`` envelope.
 
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     results_path = output_dir / "results.json"
+    experiment_path = output_dir / "experiment.json"
+
     resume_mgr = ResumeManager(results_path)
     resume_mgr.load()
 
+    experiment = _load_or_init_experiment(experiment_path, config)
+
     steward = WorkSteward(config, test_cases, output_dir, resume_mgr)
-    return await steward.run_all()
+    results = await steward.run_all()
+
+    experiment.results = results
+    experiment.completed_at = datetime.now(timezone.utc)
+    _persist_experiment(experiment, experiment_path)
+
+    return experiment
+
+
+def _load_or_init_experiment(
+    experiment_path: Path, config: ExperimentConfig,
+) -> Experiment:
+    """Load an existing experiment envelope or create a fresh one.
+
+    On resume, ``id`` and ``started_at`` are preserved; ``config`` is taken
+    from the current invocation (the most recent caller wins, matching how
+    ``ResumeManager`` already treats CLI args as authoritative).
+    """
+    if experiment_path.is_file():
+        try:
+            data = json.loads(experiment_path.read_text(encoding="utf-8"))
+            existing = Experiment.model_validate(data)
+            existing.config = config
+            return existing
+        except (json.JSONDecodeError, ValueError):
+            # Corrupt envelope — fall through to creating a fresh one.
+            pass
+    return Experiment(
+        config=config,
+        started_at=datetime.now(timezone.utc),
+    )
+
+
+def _persist_experiment(experiment: Experiment, experiment_path: Path) -> None:
+    """Atomically write the experiment envelope to disk."""
+    parent = experiment_path.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    tmp: Path | None = None
+    try:
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(parent),
+            prefix=".experiment_tmp_",
+            suffix=".json",
+        )
+        os.close(fd)
+        tmp = Path(tmp_path)
+        tmp.write_text(
+            json.dumps(experiment.model_dump(mode="json"), indent=2),
+            encoding="utf-8",
+        )
+        os.replace(str(tmp), str(experiment_path))
+    finally:
+        if tmp is not None and tmp.exists():
+            tmp.unlink(missing_ok=True)

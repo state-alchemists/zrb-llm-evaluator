@@ -31,6 +31,7 @@
 | UT-023 | REQ-019 | test_cost_summary_missing_defaults_zero | stdout with no cost line | All token fields default to 0 |
 | UT-024 | NFR-001 | test_overhead_without_llm | mock subprocess returning instantly | Wall-clock overhead < 2s |
 | UT-025 | RULE-005 | test_no_zrb_import_in_runner | runner module | No `import zrb` or `from zrb` outside test fixtures |
+| UT-026 | REQ-019 | test_tool_calls_extracted_from_history | zrb history JSON with tool-use entries | tool_calls list and tool_call_count populated; defensive on parse errors |
 
 ## Integration Tests
 

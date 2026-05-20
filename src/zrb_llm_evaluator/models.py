@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -43,11 +44,14 @@ class TrialResult(BaseModel):
     duration: float = Field(ge=0.0)
     exit_code: int
     log_path: str
+    stdout_log_path: str = ""
     verification_result: ValidationResult | None = None
     total_tokens: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
     cache_read_tokens: int = 0
+    tool_calls: list[str] = Field(default_factory=list)
+    tool_call_count: int = 0
 
 
 # @sdlc REQ-004, REQ-010, REQ-012, REQ-014, REQ-015, RULE-003
@@ -59,7 +63,7 @@ class ExperimentConfig(BaseModel):
     trials: int = Field(ge=1, default=3)
     parallelism: int = Field(ge=1, default=4)
     timeout: int = Field(ge=30, default=300)
-    cli_name: str = "zrb"
+    cli_name: str = Field(default="zrb", min_length=1)
 
     # @sdlc REQ-015
     @field_validator("models")
@@ -75,19 +79,24 @@ class ExperimentConfig(BaseModel):
 
 
 class Experiment(BaseModel):
-    """A full experiment run with config, results, and timing."""
+    """A full experiment run: config + accumulated results + timing.
+
+    Persisted as ``experiment.json`` in the output directory alongside the
+    per-trial-streamed ``results.json``.  The same ``id`` and ``started_at``
+    survive across resumed invocations.
+    """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     config: ExperimentConfig
     results: list[TrialResult] = Field(default_factory=list)
-    started_at: str = ""  # ISO datetime
-    completed_at: str | None = None
+    started_at: datetime
+    completed_at: datetime | None = None
 
 
 class Report(BaseModel):
-    """A generated report referencing an experiment's results."""
+    """Manifest describing the artifacts produced by a report generation pass."""
 
     experiment_id: str
-    markdown_path: str
-    json_path: str
-    generated_at: str  # ISO datetime
+    markdown_path: str = ""
+    json_path: str = ""
+    generated_at: datetime
