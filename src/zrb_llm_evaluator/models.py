@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -69,10 +68,10 @@ class ExperimentConfig(BaseModel):
     @field_validator("models")
     @classmethod
     def _validate_model_format(cls, v: list[str]) -> list[str]:
-        """Each model must be in provider:name format."""
-        pattern = re.compile(r"^[a-zA-Z0-9_-]+:[a-zA-Z0-9_./-]+$")
+        """Each model must be in provider:name format (provider and name non-empty)."""
         for model in v:
-            if not pattern.match(model):
+            provider, sep, name = model.partition(":")
+            if not sep or not provider or not name:
                 msg = f"Model {model!r} must be in 'provider:name' format (e.g. 'openai:gpt-4o')"
                 raise ValueError(msg)
         return v
