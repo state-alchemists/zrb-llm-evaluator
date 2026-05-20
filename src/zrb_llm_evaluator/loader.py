@@ -8,25 +8,29 @@ from __future__ import annotations
 import importlib.util
 import re
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from zrb_llm_evaluator.protocols import ValidatorProtocol
+from pydantic import BaseModel, ConfigDict
+
+from zrb_llm_evaluator.protocols import ValidatorProtocol
 
 
-# @sdlc REQ-013, RULE-001
-@dataclass
-class TestCase:
-    """A loaded test case with instruction, workdir, and validator."""
+# @sdlc REQ-013, RULE-001, RULE-003
+class TestCase(BaseModel):
+    """A loaded test case with instruction, workdir, and validator.
+
+    ``workdir`` is required by the entity dictionary; when a test case
+    directory has no ``workdir/`` subdirectory, the loader sets ``workdir``
+    to the test case directory itself (the LLM then runs against the case
+    files in place).
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     name: str
     instruction: str
-    workdir: Path | None = None
-    validator: ValidatorProtocol | None = None  # type: ignore[valid-type]  # @runtime_checkable Protocol validated via isinstance at runtime
-
-    _validator_module: str | None = field(default=None, repr=False)
+    workdir: Path
+    validator: ValidatorProtocol
 
 
 # @sdlc REQ-013, RULE-004
@@ -63,9 +67,10 @@ def load_test_case(test_case_dir: Path) -> TestCase:
         raise ValueError(msg)
     instruction = instruction_path.read_text(encoding="utf-8")
 
-    # Optionally discover workdir
+    # Discover workdir; fall back to the test-case directory itself so the
+    # entity contract (workdir Required) is honored without surprising the user.
     workdir_path = test_case_dir / "workdir"
-    workdir: Path | None = workdir_path if workdir_path.is_dir() else None
+    workdir: Path = workdir_path if workdir_path.is_dir() else test_case_dir
 
     # Load and validate validator module
     validator_path = test_case_dir / "validator.py"
@@ -80,7 +85,6 @@ def load_test_case(test_case_dir: Path) -> TestCase:
         instruction=instruction,
         workdir=workdir,
         validator=validator,
-        _validator_module=str(validator_path),
     )
 
 
@@ -154,7 +158,7 @@ def make_session_name(model: str, test_case: str, trial_index: int) -> str:
     return f"{safe_model}-{test_case}-trial-{trial_index}"
 
 
-def _import_validator(validator_path: Path) -> ValidatorProtocol:  # type: ignore[valid-type]  # @runtime_checkable Protocol validated via isinstance at runtime
+def _import_validator(validator_path: Path) -> ValidatorProtocol:
     """Dynamically import a validator module and check conformance.
 
     Args:
@@ -171,9 +175,10 @@ def _import_validator(validator_path: Path) -> ValidatorProtocol:  # type: ignor
             it does not implement ``ValidatorProtocol``.
 
     """
-    from zrb_llm_evaluator.protocols import ValidatorProtocol
-
-    module_name = validator_path.stem
+    # Unique module name per test case so multiple validator.py files don't
+    # collide in sys.modules and overwrite each other.
+    case_slug = re.sub(r"[^a-zA-Z0-9_]", "_", validator_path.parent.name)
+    module_name = f"zrb_llm_evaluator_validator__{case_slug}__{validator_path.stem}"
     spec = importlib.util.spec_from_file_location(module_name, validator_path)
     if spec is None or spec.loader is None:
         msg = f"Cannot load validator module: {validator_path}"

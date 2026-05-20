@@ -1,11 +1,14 @@
 # GENERATED FROM SPEC: specs/experiment-runner/requirements.md
 # IMPLEMENTS: REQ-019
 
-"""Parse cost / token summary lines from zrb subprocess stdout."""
+"""Parse cost / token summary lines and tool calls from zrb output."""
 
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
+from typing import Any
 
 # @sdlc REQ-019
 _COST_LINE_PATTERN = re.compile(
@@ -44,3 +47,93 @@ def parse_cost_summary(stdout: str) -> dict[str, int]:
         result["output_tokens"] = int(match.group("output"))
         result["cache_read_tokens"] = int(match.group("cache"))
     return result
+
+
+# @sdlc REQ-019
+def extract_tool_calls_from_history(history_path: Path) -> list[str]:
+    """Extract tool-call names from a zrb history JSON file.
+
+    The zrb history JSON is a list of conversation entries; tool-use entries
+    expose a ``tool_name`` (or nested ``tool_call.name``) field. This helper
+    is defensive: any parse error or unexpected shape yields an empty list.
+
+    Args:
+    ----
+        history_path: Path to the ``{session_name}.json`` history file.
+
+    Returns:
+    -------
+        Ordered list of tool names invoked; empty list on any failure.
+
+    """
+    if not history_path.is_file():
+        return []
+    try:
+        raw = history_path.read_text(encoding="utf-8")
+        data: Any = json.loads(raw)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return []
+
+    names: list[str] = []
+    try:
+        entries = _iter_history_entries(data)
+        for entry in entries:
+            name = _extract_tool_name(entry)
+            if name is not None:
+                names.append(name)
+    except (TypeError, AttributeError, KeyError):
+        return []
+    return names
+
+
+# @sdlc REQ-019
+def count_tool_calls_from_history(history_path: Path) -> tuple[list[str], int]:
+    """Return ``(tool_call_names, count)`` for the given history file.
+
+    Args:
+    ----
+        history_path: Path to the ``{session_name}.json`` history file.
+
+    Returns:
+    -------
+        Tuple of the ordered tool-call name list and its length.
+
+    """
+    names = extract_tool_calls_from_history(history_path)
+    return names, len(names)
+
+
+def _iter_history_entries(data: Any) -> list[dict[str, Any]]:
+    """Normalize the zrb history JSON into a flat list of dict entries.
+
+    Handles both ``{"history": [...]}`` and bare-list shapes.
+    """
+    candidates: list[Any]
+    if isinstance(data, list):
+        candidates = data
+    elif isinstance(data, dict):
+        history = data.get("history")
+        if isinstance(history, list):
+            candidates = history
+        else:
+            candidates = [data]
+    else:
+        return []
+    return [c for c in candidates if isinstance(c, dict)]
+
+
+def _extract_tool_name(entry: dict[str, Any]) -> str | None:
+    """Return the tool name from a history entry, or ``None`` if absent."""
+    direct = entry.get("tool_name")
+    if isinstance(direct, str) and direct:
+        return direct
+    tool_call = entry.get("tool_call")
+    if isinstance(tool_call, dict):
+        nested = tool_call.get("name")
+        if isinstance(nested, str) and nested:
+            return nested
+    role = entry.get("role")
+    name = entry.get("name")
+    if role == "tool" and isinstance(name, str) and name:
+        return name
+    return None

@@ -53,9 +53,14 @@ The primary interface is a CLI with subcommands:
 |--------|-------------|-------|
 | ExperimentConfig | models, test_case_dirs, trials, parallelism, timeout, cli_name | Input to the runner |
 | TestCase | name, instruction, workdir, validator | Discovered from disk per test case directory |
-| TrialResult | model, test_case, trial_index, status, duration, tool_calls, tool_call_count, exit_code, log_path, verification_result, total_tokens, input_tokens, output_tokens, cache_read_tokens | Written to results.json after each cell |
+| TrialResult | model, test_case, trial_index, status, duration, tool_calls, tool_call_count, exit_code, log_path, stdout_log_path, verification_result, total_tokens, input_tokens, output_tokens, cache_read_tokens | Written to results.json after each cell |
+| Experiment | id, config, results, started_at, completed_at | Envelope persisted as experiment.json; id + started_at survive across resumed invocations |
 | ValidationResult | status, score, details | Returned by the validator protocol |
 | ValidationCheck | name, passed, message | Per-check breakdown within ValidationResult |
+| Report | experiment_id, markdown_path, json_path, generated_at | Manifest returned by report generators; describes the artifacts they produced |
 
 ### Entity Modifications
-None — the entity dictionary covers all fields this feature needs.
+- `TrialResult.stdout_log_path` is added so the result references both the zrb history JSON (`log_path`) and the raw subprocess stdout/stderr log (`stdout_log_path`, written to `stdout.log`).
+- `TrialResult.tool_calls` (list of tool names) and `TrialResult.tool_call_count` are added so the report can summarize tool usage per cell.
+- `Experiment` envelopes the run (config + results + timing) and is persisted as `experiment.json` alongside the per-trial-streamed `results.json`.
+- `Report` is the return type of `generate_markdown_report` / `generate_json_report`; it carries the experiment id and the paths of the artifacts produced.
