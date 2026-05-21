@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import shutil
+import signal
 import tempfile
 import time
 from dataclasses import dataclass
@@ -295,12 +296,19 @@ class TrialRunner:
                     env=env,
                     stdout=log_file,
                     stderr=asyncio.subprocess.STDOUT,
+                    start_new_session=True,
                 )
 
                 try:
                     await asyncio.wait_for(proc.wait(), timeout=self._config.timeout)
                 except asyncio.TimeoutError:
-                    proc.kill()
+                    # @sdlc REQ-005: kill the entire descendant process group,
+                    # not just the direct child. `zrb chat` spawns LLM HTTP
+                    # workers that survive a SIGKILL to the leader alone.
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
                     await proc.wait()
                     log_file.flush()
                     log_file.write(
