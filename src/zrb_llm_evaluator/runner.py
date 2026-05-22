@@ -288,6 +288,8 @@ class TrialRunner:
                     "false",
                     "--yolo",
                     "true",
+                    "--model",
+                    model,
                     "--message",
                     self._test_case.instruction,
                     "--session",
