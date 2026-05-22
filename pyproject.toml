@@ -7,7 +7,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "zrb-llm-evaluator"
-version = "0.1.5"
+version = "0.1.6"
 description = "Multi-trial experiment runner for zrb chat"
 authors = ["Go Frendi <go.frendi.gunawan@example.com>"]
 license = "MIT"
