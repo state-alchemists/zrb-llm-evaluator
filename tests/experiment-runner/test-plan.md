@@ -48,6 +48,7 @@
 | UT-040 | REQ-028 | test_markdown_report_bolds_all_tied_cells | 2 PASS trials sharing min duration=1.0s | Both 1.0s cells bold |
 | UT-041 | REQ-029 | test_markdown_report_status_icons_mapped | Parametrized: each of EXCELLENT/PASS/FAIL/TIMEOUT/ERROR | Status text begins with the icon: 👍/✅/❌/⏱️/⚠️ followed by the status name |
 | UT-042 | REQ-025 | test_markdown_report_deterministic_byte_identical | Same `results.json` rendered twice | Both renderings produce byte-identical bytes |
+| UT-043 | REQ-005 | test_timeout_kills_whole_process_group | mock subprocess that hits timeout; `os.getpgid`/`os.killpg` patched | `create_subprocess_exec` invoked with `start_new_session=True`; `os.killpg` called once with leader's pgid and `SIGKILL`; `TrialResult.status == "TIMEOUT"` <!-- added 2026-05-21 (quickfix-2026-05-21T15-03-46) --> |
 
 ## Integration Tests
 

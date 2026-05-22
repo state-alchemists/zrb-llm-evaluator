@@ -1,7 +1,7 @@
 # COVERS: REQ-001, REQ-003, REQ-004, REQ-005, REQ-007, REQ-008, REQ-009, REQ-011,
 #   REQ-012, REQ-016, REQ-017, REQ-018, REQ-019, NFR-001,
 #   UT-003, UT-004, UT-005, UT-007, UT-008, UT-009, UT-010, UT-011,
-#   UT-013, UT-014, UT-019, UT-020, UT-021, UT-024
+#   UT-013, UT-014, UT-019, UT-020, UT-021, UT-024, UT-043
 
 """Tests for the runner module."""
 
@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import signal
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -113,20 +115,74 @@ class TestTrialRunner:
         # `await asyncio.wait_for(proc.wait(), ...)` control flow).
         mock_proc = AsyncMock()
         # First wait() raises TimeoutError (drives the timeout branch);
-        # second wait() (called after proc.kill() to reap) returns cleanly.
+        # second wait() (called after the group kill to reap) returns cleanly.
         mock_proc.wait = AsyncMock(side_effect=[asyncio.TimeoutError, 0])
         mock_proc.kill = Mock()
+        mock_proc.pid = 12345
 
         async def mock_create_subprocess_exec(*args: object, **kwargs: object) -> AsyncMock:
             return mock_proc
 
-        with patch.object(asyncio, "create_subprocess_exec", mock_create_subprocess_exec):
+        with patch.object(asyncio, "create_subprocess_exec", mock_create_subprocess_exec), \
+                patch.object(os, "getpgid", return_value=12345), \
+                patch.object(os, "killpg", Mock()):
             runner = TrialRunner(config, sample_test_case, output_dir)
             result = await runner.run("openai:gpt-4o", 1)
 
         assert result.status == "TIMEOUT"
         # @sdlc REQ-008: log_path references a file
         assert result.log_path != ""
+
+    # COVERS: REQ-005 (UT-043)
+    @pytest.mark.asyncio
+    async def test_timeout_kills_whole_process_group(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """UT-043: on timeout, the runner SIGKILLs the entire descendant group.
+
+        Asserts:
+        - create_subprocess_exec is invoked with start_new_session=True so the
+          child becomes its own process-group leader.
+        - os.killpg is called once with that leader's pgid and SIGKILL.
+        - The resulting TrialResult.status == "TIMEOUT".
+        """
+        # Use model_construct to bypass Pydantic validation (min timeout is 30)
+        config = ExperimentConfig.model_construct(
+            models=["openai:gpt-4o"],
+            test_case_dirs=[tmp_path],
+            trials=1,
+            parallelism=1,
+            timeout=1,
+        )
+        output_dir = tmp_path / "out"
+
+        # Mock proc.wait to raise asyncio.TimeoutError on the first call (drives
+        # the timeout branch) and return 0 on the post-kill reap.
+        mock_proc = AsyncMock()
+        mock_proc.wait = AsyncMock(side_effect=[asyncio.TimeoutError, 0])
+        mock_proc.kill = Mock()
+        mock_proc.pid = 12345
+
+        captured_kwargs: dict[str, object] = {}
+
+        async def mock_create_subprocess_exec(
+            *args: object, **kwargs: object,
+        ) -> AsyncMock:
+            captured_kwargs.update(kwargs)
+            return mock_proc
+
+        mock_killpg = Mock()
+        with patch.object(asyncio, "create_subprocess_exec", mock_create_subprocess_exec), \
+                patch.object(os, "getpgid", return_value=12345), \
+                patch.object(os, "killpg", mock_killpg):
+            runner = TrialRunner(config, sample_test_case, output_dir)
+            result = await runner.run("openai:gpt-4o", 1)
+
+        # start_new_session=True was passed through to create_subprocess_exec.
+        assert captured_kwargs.get("start_new_session") is True
+        # killpg was invoked once with the leader's pgid and SIGKILL.
+        mock_killpg.assert_called_once_with(12345, signal.SIGKILL)
+        assert result.status == "TIMEOUT"
 
     @pytest.mark.asyncio
     async def test_nonzero_exit_records_error(
@@ -539,14 +595,17 @@ class TestRunnerValidatorIntegration:
         # timeout branch (runner uses `await asyncio.wait_for(proc.wait(), ...)`).
         mock_proc = AsyncMock()
         # First wait() raises TimeoutError (drives the timeout branch);
-        # second wait() (called after proc.kill() to reap) returns cleanly.
+        # second wait() (called after the group kill to reap) returns cleanly.
         mock_proc.wait = AsyncMock(side_effect=[asyncio.TimeoutError, 0])
         mock_proc.kill = Mock()
+        mock_proc.pid = 12345
 
         async def mock_create_subprocess_exec(*args: object, **kwargs: object) -> AsyncMock:
             return mock_proc
 
-        with patch.object(asyncio, "create_subprocess_exec", mock_create_subprocess_exec):
+        with patch.object(asyncio, "create_subprocess_exec", mock_create_subprocess_exec), \
+                patch.object(os, "getpgid", return_value=12345), \
+                patch.object(os, "killpg", Mock()):
             runner = TrialRunner(config, sample_test_case, output_dir)
             result = await runner.run("openai:gpt-4o", 1)
 

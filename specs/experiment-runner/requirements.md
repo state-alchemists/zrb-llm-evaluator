@@ -14,7 +14,7 @@
 
 ### Event-Driven (WHEN/THEN SHALL)
 - `REQ-004` (from AC-001): WHEN the user invokes `run` THEN SHALL the framework iterate every model × test case × trial combination.
-- `REQ-005` (from AC-006): WHEN a trial exceeds the configured timeout THEN SHALL the subprocess be killed and the trial recorded as TIMEOUT.
+- `REQ-005` (from AC-006): WHEN a trial exceeds the configured timeout THEN SHALL the subprocess **and its entire descendant process group** be killed and the trial recorded as TIMEOUT. <!-- updated 2026-05-21 (quickfix-2026-05-21T15-03-46) -->
 - `REQ-006` (from AC-007): WHEN the framework starts and finds an existing `results.json` THEN SHALL it load the file and skip all cells with a terminal status.
 - `REQ-007`: WHEN a subprocess returns a non-zero exit code THEN SHALL the trial be recorded as ERROR unless a verification marker overrides it.
 - `REQ-022` (from AC-009): WHEN a test case has no dedicated `workdir/` source to stage THEN SHALL the runner create an empty `workdir/` directory inside the trial cell before launching the subprocess.
