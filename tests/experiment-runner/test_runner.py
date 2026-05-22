@@ -310,6 +310,10 @@ class TestTrialRunner:
         assert call_args is not None
         args_list = call_args[0]
         assert "--session" in args_list
+        # The cell's model identifier must be forwarded to `zrb chat`,
+        # otherwise every trial silently runs zrb's default model.
+        assert "--model" in args_list
+        assert args_list[args_list.index("--model") + 1] == "openai:gpt-4o"
 
     @pytest.mark.asyncio
     async def test_output_dir_structure(
