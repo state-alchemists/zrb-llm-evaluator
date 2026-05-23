@@ -19,6 +19,7 @@ Each trial result is appended to `results.json` atomically: write to a temp file
 - `parallelism`: int >= 1
 - `timeout`: int >= 30
 - `cli_name`: non-empty string
+- `env_prefix`: non-empty string, default `"ZRB"`
 
 Test case modules are dynamically imported and checked against `ValidatorProtocol` at load time. A test case that fails protocol conformance is rejected with a clear error before any trial begins.
 
@@ -31,7 +32,7 @@ The primary interface is a CLI with subcommands:
 
 | Method | Path | Request | Response | Auth |
 |--------|------|---------|----------|------|
-| CLI | `zrb-llm-evaluator run` | `--models`, `--test-cases`, `--trials`, `--parallelism`, `--timeout`, `--cli-name`, `--output-dir` | stdout progress + filesystem results | None |
+| CLI | `zrb-llm-evaluator run` | `--models`, `--test-cases`, `--trials`, `--parallelism`, `--timeout`, `--cli-name`, `--env-prefix`, `--output-dir` | stdout progress + filesystem results | None |
 | CLI | `zrb-llm-evaluator list [dir]` | `--dir` (optional, default CWD) | Table of previously-run experiments | None |
 | CLI | `zrb-llm-evaluator report [dir]` | `--dir` (optional, default CWD) | Re-generated report to stdout | None |
 
@@ -57,8 +58,10 @@ LLM's view (per ADR-7):
 ├── workdir/         ← subprocess cwd (LLM-visible)
 │   └── (staged test-case workdir files only)
 ├── stdout.log       ← LLM-invisible (sibling of workdir)
-└── history/         ← LLM-invisible (sibling of workdir)
-    └── {session_name}.json
+├── history/         ← LLM-invisible (sibling of workdir)
+│   └── {session_name}.json
+└── notes/           ← LLM-invisible (sibling of workdir)
+    └── (journal/activity-log entries written by the LLM)
 ```
 
 Invariants enforced by REQ-020 / REQ-021 / REQ-022 / REQ-023 / REQ-024:
@@ -72,9 +75,15 @@ Invariants enforced by REQ-020 / REQ-021 / REQ-022 / REQ-023 / REQ-024:
 `..` traversal from inside `workdir/` reaches the evaluation files —
 this is accepted per ADR-7's threat model (honest LLM, not adversarial).
 
-The `ZRB_LLM_HISTORY_DIR` env var is set to the trial's `history/`
-directory (a sibling of `workdir/`), so zrb writes the conversation
-history outside the LLM's `cwd`.
+The `{env_prefix}_LLM_HISTORY_DIR` env var (default `ZRB_LLM_HISTORY_DIR`)
+is set to the trial's `history/` directory (a sibling of `workdir/`), so
+zrb writes the conversation history outside the LLM's `cwd`. Similarly,
+`{env_prefix}_LLM_JOURNAL_DIR` (default `ZRB_LLM_JOURNAL_DIR`) is set to
+the trial's `notes/` directory (a sibling of `workdir/`), so
+journal/activity-log entries written by the LLM during the experiment are
+captured per-trial and never leak into the user's real `~/.zrb/llm-notes/`.
+The env prefix is configurable via `--env-prefix` (default `"ZRB"`),
+supporting white-label zrb forks with a different `ENV_PREFIX`.
 
 ## Report Rendering (per ADR-8)
 
@@ -91,7 +100,7 @@ Determinism: given the same `results.json`, repeated runs of `MarkdownReporter` 
 
 | Entity | Fields Used | Notes |
 |--------|-------------|-------|
-| ExperimentConfig | models, test_case_dirs, trials, parallelism, timeout, cli_name | Input to the runner |
+| ExperimentConfig | models, test_case_dirs, trials, parallelism, timeout, cli_name, env_prefix | Input to the runner; env_prefix controls the `{prefix}_LLM_*` env var names |
 | TestCase | name, instruction, workdir, validator | Discovered from disk per test case directory |
 | TrialResult | model, test_case, trial_index, status, duration, tool_calls, tool_call_count, exit_code, log_path, stdout_log_path, verification_result, total_tokens, input_tokens, output_tokens, cache_read_tokens | Written to results.json after each cell |
 | Experiment | id, config, results, started_at, completed_at | Envelope persisted as experiment.json; id + started_at survive across resumed invocations |
@@ -104,3 +113,6 @@ Determinism: given the same `results.json`, repeated runs of `MarkdownReporter` 
 - `TrialResult.tool_calls` (list of tool names) and `TrialResult.tool_call_count` are added so the report can summarize tool usage per cell.
 - `Experiment` envelopes the run (config + results + timing) and is persisted as `experiment.json` alongside the per-trial-streamed `results.json`.
 - `Report` is the return type of `generate_markdown_report` / `generate_json_report`; it carries the experiment id and the paths of the artifacts produced.
+
+---
+*Documented from code at 2026-05-23T14-18-03. Scope: experiment-runner. Source commit: bab084d.*

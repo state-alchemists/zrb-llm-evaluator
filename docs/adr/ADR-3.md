@@ -7,9 +7,9 @@ Accepted
 Each trial runs `zrb chat --interactive false --message <instruction> --session <name>`. zrb's `FileHistoryManager` automatically saves the full conversation history as structured JSON (`pydantic_ai` ModelMessage format) to the directory configured by `ZRB_LLM_HISTORY_DIR`. The file is written after each turn, so partial output survives timeout. There is no need to manually stream subprocess stdout to a log file.
 
 ## Decision
-Before each trial, set `ZRB_LLM_HISTORY_DIR` to the experiment's per-cell output directory. Pass a deterministic session name via `--session eval-{model_safe}-{test_case}-trial-{N}`. After the subprocess finishes (or is killed on timeout), the conversation history is available as `{history_dir}/{session_name}.json`. The validator receives the path to this file and can read it using `FileHistoryManager.load()` or raw JSON parsing.
+Before each trial, set `ZRB_LLM_HISTORY_DIR` to the trial's `history/` directory and `ZRB_LLM_JOURNAL_DIR` to the trial's `notes/` directory — both siblings of the per-trial `workdir/`. Pass a deterministic session name via `--session eval-{model_safe}-{test_case}-trial-{N}`. After the subprocess finishes (or is killed on timeout), the conversation history is available as `{history_dir}/{session_name}.json` and any journal/activity-log entries the LLM wrote during the experiment are captured in `{notes_dir}/`. The validator receives the path to the history file and can read it using `FileHistoryManager.load()` or raw JSON parsing.
 
-The subprocess stdout is still captured for cost-summary line parsing (token counts, exit code), but the authoritative conversation history is the JSON file written by zrb itself.
+The subprocess stdout is still captured for cost-summary line parsing (token counts, exit code), but the authoritative conversation history is the JSON file written by zrb itself. Journal isolation prevents experimental notes from contaminating the user's real `~/.zrb/llm-notes/`.
 
 ## Consequences
 ### Positive

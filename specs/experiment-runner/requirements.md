@@ -7,7 +7,7 @@
 - `REQ-002` (from AC-006): ALWAYS SHALL the number of concurrent subprocesses not exceed the configured parallelism.
 - `REQ-003` (from AC-007): ALWAYS SHALL completed trial results persist to disk before the next trial begins.
 - `REQ-020` (from AC-008): ALWAYS SHALL the trial subprocess `cwd` be a nested `workdir/` directory inside the per-trial cell directory — never the cell directory itself.
-- `REQ-021` (from AC-008): ALWAYS SHALL the trial's `stdout.log`, `history/` directory, and any other evaluation artifacts live as siblings of `workdir/` and not inside it.
+- `REQ-021` (from AC-008): ALWAYS SHALL the trial's `stdout.log`, `history/` directory, `notes/` directory, and any other evaluation artifacts live as siblings of `workdir/` and not inside it.
 - `REQ-025` (from AC-010): ALWAYS SHALL trial rows in `report.md` be sorted by `model` ascending, then `test_case` ascending, then `trial_index` ascending.
 - `REQ-026` (from AC-011): ALWAYS SHALL the best-metric bolding scope be one test case (spanning all models and all trials in that test case), and ALWAYS SHALL trials with status `FAIL`, `TIMEOUT`, or `ERROR` be excluded from the best-metric computation.
 - `REQ-027` (from AC-012): ALWAYS SHALL `report.md` use pure Markdown syntax — no embedded HTML — for sort order, bolding, and status icons.
@@ -36,7 +36,7 @@
 
 ### Mandatory (SHALL)
 - `REQ-015` (from AC-001): The runner SHALL accept models in `provider:model_name` format (e.g., `openai:gpt-4o`).
-- `REQ-016` (from AC-003): The runner SHALL set `ZRB_LLM_HISTORY_DIR` and pass `--session` to each `zrb chat` invocation.
+- `REQ-016` (from AC-003): The runner SHALL set `{env_prefix}_LLM_HISTORY_DIR` and `{env_prefix}_LLM_JOURNAL_DIR` (where `env_prefix` is the configured env var prefix, default `ZRB`) and pass `--session` to each `zrb chat` invocation.
 - `REQ-017` (from AC-005): The runner SHALL write each completed `TrialResult` to `results.json` immediately upon finishing.
 - `REQ-018` (from AC-001): The runner SHALL create a per-cell output directory: `{output_dir}/{model_safe}/{test_case}/trial-{N}/`.
 - `REQ-019`: The runner SHALL parse the cost summary line from subprocess stdout and populate token fields in `TrialResult`.
@@ -51,3 +51,6 @@
 
 ## NFRs Validated Outside Code
 - None.
+
+---
+*Documented from code at 2026-05-23T14-18-03. Scope: experiment-runner. Source commit: bab084d.*

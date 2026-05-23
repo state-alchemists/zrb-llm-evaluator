@@ -269,11 +269,15 @@ class TrialRunner:
         session_name = make_session_name(model, self._test_case.name, trial_index)
         history_dir = cell_dir / "history"
         history_dir.mkdir(parents=True, exist_ok=True)
+        journal_dir = cell_dir / "notes"
+        journal_dir.mkdir(parents=True, exist_ok=True)
 
         log_path = cell_dir / "stdout.log"
         history_log_path = history_dir / f"{session_name}.json"
+        prefix = self._config.env_prefix
         env = os.environ.copy()
-        env["ZRB_LLM_HISTORY_DIR"] = str(history_dir)
+        env[f"{prefix}_LLM_HISTORY_DIR"] = str(history_dir)
+        env[f"{prefix}_LLM_JOURNAL_DIR"] = str(journal_dir)
 
         start = time.monotonic()
         # Stream subprocess stdout/stderr directly to disk so partial output

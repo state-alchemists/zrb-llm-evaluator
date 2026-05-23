@@ -20,6 +20,7 @@
 | parallelism | int | >= 1, default 4 | Max concurrent subprocesses |
 | timeout | int | >= 30, default 300 | Per-trial timeout in seconds |
 | cli_name | str | default "zrb" | CLI binary name (enables white-label forks) |
+| env_prefix | str | default "ZRB" | Env var prefix; used to construct `{prefix}_LLM_HISTORY_DIR` and `{prefix}_LLM_JOURNAL_DIR` env var names |
 
 ### TestCase
 | Field | Type | Constraints | Description |

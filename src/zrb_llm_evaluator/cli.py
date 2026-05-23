@@ -54,6 +54,9 @@ def run(
     ),
     timeout: int = typer.Option(300, "--timeout", help="Per-trial timeout in seconds"),
     cli_name: str = typer.Option("zrb", "--cli-name", help="CLI binary name"),
+    env_prefix: str = typer.Option(
+        "ZRB", "--env-prefix", help="Env var prefix (default ZRB → ZRB_LLM_*)",
+    ),
     output_dir: str = typer.Option(
         "./out", "--output-dir", help="Output directory for results",
     ),
@@ -73,6 +76,7 @@ def run(
             parallelism=parallelism,
             timeout=timeout,
             cli_name=cli_name,
+            env_prefix=env_prefix,
         )
     except Exception as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
