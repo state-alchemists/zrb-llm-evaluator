@@ -55,7 +55,7 @@ The evaluator orchestrates multiple `zrb chat` subprocess invocations in paralle
 ### Report
 | Component | Responsibility | Dependencies |
 |-----------|---------------|-------------|
-| `MarkdownReporter` | Generates Markdown summary + per-cell detail tables | — |
+| `MarkdownReporter` | Generates the aggregate pre-section (overall/by-model/by-test-case/grid/failures), the Markdown summary, and per-cell detail tables | — |
 | `JSONReporter` | Serializes all results to structured JSON | json |
 
 ## Key Decisions
@@ -69,6 +69,7 @@ The evaluator orchestrates multiple `zrb chat` subprocess invocations in paralle
 | ADR-6 | Filesystem-Based Experiment State with JSON Resume | Accepted |
 | ADR-7 | Trial Subprocess Isolation via Nested Workdir | Accepted |
 | ADR-8 | Markdown Report Rendering Conventions | Accepted |
+| ADR-9 | Aggregate Sections in the Markdown Report | Accepted |
 
 ## Data Flow
 

@@ -1,0 +1,195 @@
+{
+  "id": "exp-fixed",
+  "config": {
+    "models": [
+      "openai:gpt-4o"
+    ],
+    "test_case_dirs": [
+      "/tmp/fake-case"
+    ],
+    "trials": 1,
+    "parallelism": 1,
+    "timeout": 30,
+    "cli_name": "zrb"
+  },
+  "results": [
+    {
+      "id": "trial-alpha:a-case-a-1",
+      "model": "alpha:a",
+      "test_case": "case-a",
+      "trial_index": 1,
+      "status": "EXCELLENT",
+      "duration": 1.0,
+      "exit_code": 0,
+      "log_path": "/tmp/fake.log",
+      "stdout_log_path": "",
+      "verification_result": {
+        "status": "EXCELLENT",
+        "score": 0.8,
+        "details": []
+      },
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "tool_calls": [],
+      "tool_call_count": 0
+    },
+    {
+      "id": "trial-alpha:a-case-a-2",
+      "model": "alpha:a",
+      "test_case": "case-a",
+      "trial_index": 2,
+      "status": "PASS",
+      "duration": 2.0,
+      "exit_code": 0,
+      "log_path": "/tmp/fake.log",
+      "stdout_log_path": "",
+      "verification_result": {
+        "status": "PASS",
+        "score": 0.8,
+        "details": []
+      },
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "tool_calls": [],
+      "tool_call_count": 0
+    },
+    {
+      "id": "trial-alpha:a-case-b-1",
+      "model": "alpha:a",
+      "test_case": "case-b",
+      "trial_index": 1,
+      "status": "FAIL",
+      "duration": 0.5,
+      "exit_code": 0,
+      "log_path": "/tmp/fake.log",
+      "stdout_log_path": "",
+      "verification_result": {
+        "status": "FAIL",
+        "score": 0.8,
+        "details": []
+      },
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "tool_calls": [],
+      "tool_call_count": 0
+    },
+    {
+      "id": "trial-alpha:a-case-b-2",
+      "model": "alpha:a",
+      "test_case": "case-b",
+      "trial_index": 2,
+      "status": "TIMEOUT",
+      "duration": 30.0,
+      "exit_code": 0,
+      "log_path": "/tmp/fake.log",
+      "stdout_log_path": "",
+      "verification_result": {
+        "status": "FAIL",
+        "score": 0.8,
+        "details": []
+      },
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "tool_calls": [],
+      "tool_call_count": 0
+    },
+    {
+      "id": "trial-beta:b-case-a-1",
+      "model": "beta:b",
+      "test_case": "case-a",
+      "trial_index": 1,
+      "status": "ERROR",
+      "duration": 0.1,
+      "exit_code": 0,
+      "log_path": "/tmp/fake.log",
+      "stdout_log_path": "",
+      "verification_result": {
+        "status": "FAIL",
+        "score": 0.8,
+        "details": []
+      },
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "tool_calls": [],
+      "tool_call_count": 0
+    },
+    {
+      "id": "trial-beta:b-case-a-2",
+      "model": "beta:b",
+      "test_case": "case-a",
+      "trial_index": 2,
+      "status": "PASS",
+      "duration": 1.5,
+      "exit_code": 0,
+      "log_path": "/tmp/fake.log",
+      "stdout_log_path": "",
+      "verification_result": {
+        "status": "PASS",
+        "score": 0.8,
+        "details": []
+      },
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "tool_calls": [],
+      "tool_call_count": 0
+    },
+    {
+      "id": "trial-beta:b-case-b-1",
+      "model": "beta:b",
+      "test_case": "case-b",
+      "trial_index": 1,
+      "status": "PASS",
+      "duration": 3.0,
+      "exit_code": 0,
+      "log_path": "/tmp/fake.log",
+      "stdout_log_path": "",
+      "verification_result": {
+        "status": "PASS",
+        "score": 0.8,
+        "details": []
+      },
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "tool_calls": [],
+      "tool_call_count": 0
+    },
+    {
+      "id": "trial-beta:b-case-b-2",
+      "model": "beta:b",
+      "test_case": "case-b",
+      "trial_index": 2,
+      "status": "EXCELLENT",
+      "duration": 2.5,
+      "exit_code": 0,
+      "log_path": "/tmp/fake.log",
+      "stdout_log_path": "",
+      "verification_result": {
+        "status": "EXCELLENT",
+        "score": 0.8,
+        "details": []
+      },
+      "total_tokens": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_read_tokens": 0,
+      "tool_calls": [],
+      "tool_call_count": 0
+    }
+  ],
+  "started_at": "2024-01-01T00:00:00Z",
+  "completed_at": "2024-01-01T01:00:00Z"
+}

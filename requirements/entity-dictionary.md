@@ -72,7 +72,7 @@
 | Field | Type | Constraints | Description |
 |-------|------|-------------|-------------|
 | experiment_id | UUID | FK → Experiment | Which experiment this reports |
-| markdown_path | Path | Required | Path to the Markdown report file |
+| markdown_path | Path | Required | Path to the Markdown report file (contains aggregate sections followed by the per-trial summary and per-trial details) |
 | json_path | Path | Required | Path to the structured JSON results file |
 | generated_at | datetime | Required | When the report was generated |
 
@@ -89,3 +89,4 @@
 - `ValidationResult.status` must be EXCELLENT, PASS, or FAIL. The `_classify_final_status` logic from the existing runner (verifier-emitted `VERIFICATION_RESULT:` markers take precedence over execution status) is carried forward.
 - `TrialResult.status` may additionally be TIMEOUT or ERROR for non-verification outcomes.
 - All token fields default to 0 when the cost summary line is missing (timeout/aborted run).
+- `TrialResult.duration` is always populated (wall-clock seconds), even for `TIMEOUT`/`ERROR` trials, so it is safe to include them in the `Avg dur (s)` mean for the **By Model** aggregate table.
