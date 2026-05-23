@@ -1,5 +1,9 @@
-# GENERATED FROM SPEC: specs/experiment-runner/requirements.md
-# IMPLEMENTS: REQ-003, REQ-017, REQ-025, REQ-026, REQ-027, REQ-028, REQ-029
+# GENERATED FROM SPEC: specs/experiment-runner/requirements.md,
+#                      specs/report-aggregate/requirements.md
+# IMPLEMENTS: REQ-003, REQ-017, REQ-025, REQ-026, REQ-027, REQ-028, REQ-029,
+#             REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036,
+#             REQ-037, REQ-038, REQ-039, REQ-040, REQ-041, REQ-042,
+#             NFR-002, NFR-003, NFR-004
 
 """Report generation — Markdown and JSON output."""
 
@@ -8,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
@@ -125,7 +129,190 @@ def _render_summary_row(r: TrialResult, best: _BestMetrics | None) -> str:
     )
 
 
-# @sdlc REQ-003, REQ-017
+# Canonical status order for the Overall Status table (REQ-035).
+_CANONICAL_STATUS_ORDER: Final[tuple[str, ...]] = (
+    "EXCELLENT",
+    "PASS",
+    "FAIL",
+    "TIMEOUT",
+    "ERROR",
+)
+
+# Statuses whose trials populate the Failing / Timeout table (REQ-040).
+_FAILING_STATUSES: Final[frozenset[str]] = frozenset({"FAIL", "TIMEOUT", "ERROR"})
+
+# Em dash literal used for empty Grid cells (REQ-039).
+_EM_DASH: Final[str] = "—"
+
+
+@dataclass
+class _StatusCounts:
+    """Per-status counters for a single bucket (model or test case)."""
+
+    excellent: int = 0
+    passed: int = 0
+    failed: int = 0
+    timeout: int = 0
+    error: int = 0
+    trials: int = 0
+
+    def add(self, status: str) -> None:
+        """Increment the counter for ``status`` and the total trials."""
+        self.trials += 1
+        if status == "EXCELLENT":
+            self.excellent += 1
+        elif status == "PASS":
+            self.passed += 1
+        elif status == "FAIL":
+            self.failed += 1
+        elif status == "TIMEOUT":
+            self.timeout += 1
+        elif status == "ERROR":
+            self.error += 1
+
+
+@dataclass
+class _AggregateBuckets:
+    """Accumulated aggregate buckets used to render the aggregate sections."""
+
+    overall: dict[str, int] = field(default_factory=dict)
+    by_model: dict[str, _StatusCounts] = field(default_factory=dict)
+    by_case: dict[str, _StatusCounts] = field(default_factory=dict)
+    by_cell: dict[tuple[str, str], list[TrialResult]] = field(default_factory=dict)
+    failing: list[TrialResult] = field(default_factory=list)
+    model_duration_sum: dict[str, float] = field(default_factory=dict)
+    total: int = 0
+
+
+# @sdlc NFR-002
+def _collect_aggregates(results: list[TrialResult]) -> _AggregateBuckets:
+    """Build all aggregate buckets in a single O(T) pass over ``results``."""
+    b = _AggregateBuckets()
+    for r in results:
+        b.total += 1
+        b.overall[r.status] = b.overall.get(r.status, 0) + 1
+
+        model_bucket = b.by_model.get(r.model)
+        if model_bucket is None:
+            model_bucket = _StatusCounts()
+            b.by_model[r.model] = model_bucket
+        model_bucket.add(r.status)
+        b.model_duration_sum[r.model] = (
+            b.model_duration_sum.get(r.model, 0.0) + r.duration
+        )
+
+        case_bucket = b.by_case.get(r.test_case)
+        if case_bucket is None:
+            case_bucket = _StatusCounts()
+            b.by_case[r.test_case] = case_bucket
+        case_bucket.add(r.status)
+
+        b.by_cell.setdefault((r.model, r.test_case), []).append(r)
+
+        if r.status in _FAILING_STATUSES:
+            b.failing.append(r)
+    return b
+
+
+# @sdlc REQ-035
+def _render_overall_status(b: _AggregateBuckets) -> list[str]:
+    """Render the Overall Status section."""
+    lines: list[str] = [
+        f"**Total trials**: {b.total}\n",
+        "\n## Overall Status\n\n",
+        "| Status | Count | % |\n",
+        "|--------|-------|---|\n",
+    ]
+    for status in _CANONICAL_STATUS_ORDER:
+        count = b.overall.get(status, 0)
+        if count == 0:
+            continue
+        pct = (count / b.total * 100.0) if b.total > 0 else 0.0
+        lines.append(f"| {_status_cell(status)} | {count} | {pct:.1f} |\n")
+    return lines
+
+
+# @sdlc REQ-036
+def _render_by_model(b: _AggregateBuckets) -> list[str]:
+    """Render the By Model section."""
+    lines: list[str] = [
+        "\n## By Model\n\n",
+        "| Model | Trials | 👍 | ✅ | ❌ | ⏱️ | ⚠️ | Avg dur (s) |\n",
+        "|-------|--------|----|----|----|----|----|-------------|\n",
+    ]
+    for model in sorted(b.by_model):
+        c = b.by_model[model]
+        avg = (b.model_duration_sum[model] / c.trials) if c.trials > 0 else 0.0
+        lines.append(
+            f"| {model} | {c.trials} | {c.excellent} | {c.passed} | "
+            f"{c.failed} | {c.timeout} | {c.error} | {avg:.1f} |\n"
+        )
+    return lines
+
+
+# @sdlc REQ-037
+def _render_by_test_case(b: _AggregateBuckets) -> list[str]:
+    """Render the By Test Case section."""
+    lines: list[str] = [
+        "\n## By Test Case\n\n",
+        "| Test Case | Trials | 👍 | ✅ | ❌ | ⏱️ | ⚠️ |\n",
+        "|-----------|--------|----|----|----|----|----|\n",
+    ]
+    for case in sorted(b.by_case):
+        c = b.by_case[case]
+        lines.append(
+            f"| {case} | {c.trials} | {c.excellent} | {c.passed} | "
+            f"{c.failed} | {c.timeout} | {c.error} |\n"
+        )
+    return lines
+
+
+# @sdlc REQ-038, REQ-039
+def _render_grid(b: _AggregateBuckets) -> list[str]:
+    """Render the Grid section: models as rows, test cases as columns."""
+    models = sorted(b.by_model)
+    cases = sorted(b.by_case)
+
+    lines: list[str] = ["\n## Grid\n\n"]
+    header_cols = ["Model", *cases]
+    lines.append("| " + " | ".join(header_cols) + " |\n")
+    sep_cols = ["-" * max(3, len(col)) for col in header_cols]
+    lines.append("|" + "|".join(sep_cols) + "|\n")
+
+    for model in models:
+        row_cells: list[str] = [model]
+        for case in cases:
+            trials = b.by_cell.get((model, case))
+            if not trials:
+                row_cells.append(_EM_DASH)
+                continue
+            icons = [
+                _STATUS_ICONS.get(t.status, "")
+                for t in sorted(trials, key=lambda x: x.trial_index)
+            ]
+            row_cells.append(" ".join(icons))
+        lines.append("| " + " | ".join(row_cells) + " |\n")
+    return lines
+
+
+# @sdlc REQ-040, REQ-041
+def _render_failing(b: _AggregateBuckets) -> list[str]:
+    """Render the Failing / Timeout Trials section."""
+    lines: list[str] = ["\n## Failing / Timeout Trials\n\n"]
+    if not b.failing:
+        lines.append("No failing or timeout trials.\n")
+        return lines
+    lines.append("| Model | Test Case | Trial | Status | Duration (s) |\n")
+    lines.append("|-------|-----------|-------|--------|--------------|\n")
+    for r in sorted(b.failing, key=_trial_sort_key):
+        lines.append(
+            f"| {r.model} | {r.test_case} | {r.trial_index} | "
+            f"{_status_cell(r.status)} | {r.duration:.1f} |\n"
+        )
+    return lines
+
+
+# @sdlc REQ-003, REQ-017, NFR-003
 def generate_json_report(experiment: Experiment, output_path: Path) -> Report:
     """Generate a structured JSON report of an experiment.
 
@@ -166,7 +353,8 @@ def generate_json_report(experiment: Experiment, output_path: Path) -> Report:
     )
 
 
-# @sdlc REQ-003, REQ-025, REQ-026, REQ-027, REQ-028, REQ-029
+# @sdlc REQ-003, REQ-025, REQ-026, REQ-027, REQ-028, REQ-029,
+#       REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-042, NFR-004
 def generate_markdown_report(experiment: Experiment, output_path: Path) -> Report:
     """Generate a human-readable Markdown report.
 
@@ -199,16 +387,29 @@ def generate_markdown_report(experiment: Experiment, output_path: Path) -> Repor
     lines: list[str] = [
         "# Experiment Report\n",
         f"**Experiment ID**: {experiment.id}\n",
-        f"**Total trials**: {len(sorted_results)}\n",
         f"**Started**: {started_str}\n",
         f"**Completed**: {completed_str}\n",
         f"**Generated**: {generated_at.isoformat()}\n",
-        "\n## Summary\n\n",
-        "| Model | Test Case | Trial | Status | Duration (s) | Score | "
-        "Total Tokens | Input | Output | Cache | Tool Calls |\n",
-        "|-------|-----------|-------|--------|-------------|-------|"
-        "--------------|-------|--------|-------|------------|\n",
+        "\n",
     ]
+
+    # Aggregate sections (REQ-030) — computed at render time only (REQ-033).
+    aggregates = _collect_aggregates(sorted_results)
+    lines.extend(_render_overall_status(aggregates))
+    lines.extend(_render_by_model(aggregates))
+    lines.extend(_render_by_test_case(aggregates))
+    lines.extend(_render_grid(aggregates))
+    lines.extend(_render_failing(aggregates))
+
+    lines.append("\n## Summary\n\n")
+    lines.append(
+        "| Model | Test Case | Trial | Status | Duration (s) | Score | "
+        "Total Tokens | Input | Output | Cache | Tool Calls |\n"
+    )
+    lines.append(
+        "|-------|-----------|-------|--------|-------------|-------|"
+        "--------------|-------|--------|-------|------------|\n"
+    )
 
     for r in sorted_results:
         lines.append(_render_summary_row(r, best_by_case.get(r.test_case)))
