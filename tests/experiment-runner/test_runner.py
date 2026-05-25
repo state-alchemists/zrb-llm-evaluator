@@ -280,7 +280,7 @@ class TestTrialRunner:
     async def test_env_var_set_before_invocation(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-019: ZRB_LLM_HISTORY_DIR set; --session passed."""
+        """UT-019: ZRB_LLM_HISTORY_DIR and ZRB_LLM_JOURNAL_DIR set; --session passed."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
@@ -344,8 +344,8 @@ class TestTrialRunner:
         assert "ZRB_LLM_JOURNAL_DIR" in env
         journal_dir = Path(env["ZRB_LLM_JOURNAL_DIR"])
         history_dir = Path(env["ZRB_LLM_HISTORY_DIR"])
-        # Path ends with /llm-notes
-        assert journal_dir.name == "llm-notes"
+        # Path ends with /notes
+        assert journal_dir.name == "notes"
         # Sibling of history/ inside the same cell_dir
         assert journal_dir.parent == history_dir.parent
 

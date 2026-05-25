@@ -272,15 +272,17 @@ class TrialRunner:
 
         # @sdlc REQ-016: per-trial LLM journal isolation. Sibling of
         # workdir/ and history/ inside cell_dir; zrb's journal writer
-        # honors ZRB_LLM_JOURNAL_DIR (default ~/.zrb/llm-notes/).
-        notes_dir = cell_dir / "llm-notes"
-        notes_dir.mkdir(parents=True, exist_ok=True)
+        # honors {env_prefix}_LLM_JOURNAL_DIR (default ZRB_LLM_JOURNAL_DIR,
+        # which itself defaults to ~/.zrb/llm-notes/).
+        journal_dir = cell_dir / "notes"
+        journal_dir.mkdir(parents=True, exist_ok=True)
 
         log_path = cell_dir / "stdout.log"
         history_log_path = history_dir / f"{session_name}.json"
+        prefix = self._config.env_prefix
         env = os.environ.copy()
-        env["ZRB_LLM_HISTORY_DIR"] = str(history_dir)
-        env["ZRB_LLM_JOURNAL_DIR"] = str(notes_dir)
+        env[f"{prefix}_LLM_HISTORY_DIR"] = str(history_dir)
+        env[f"{prefix}_LLM_JOURNAL_DIR"] = str(journal_dir)
 
         start = time.monotonic()
         # Stream subprocess stdout/stderr directly to disk so partial output

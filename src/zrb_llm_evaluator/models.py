@@ -63,6 +63,7 @@ class ExperimentConfig(BaseModel):
     parallelism: int = Field(ge=1, default=4)
     timeout: int = Field(ge=30, default=300)
     cli_name: str = Field(default="zrb", min_length=1)
+    env_prefix: str = Field(default="ZRB", min_length=1)
 
     # @sdlc REQ-015
     @field_validator("models")

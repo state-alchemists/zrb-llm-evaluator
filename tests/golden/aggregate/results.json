@@ -10,7 +10,8 @@
     "trials": 1,
     "parallelism": 1,
     "timeout": 30,
-    "cli_name": "zrb"
+    "cli_name": "zrb",
+    "env_prefix": "ZRB"
   },
   "results": [
     {
