@@ -386,10 +386,10 @@ def generate_markdown_report(experiment: Experiment, output_path: Path) -> Repor
     )
     lines: list[str] = [
         "# Experiment Report\n",
-        f"**Experiment ID**: {experiment.id}\n",
-        f"**Started**: {started_str}\n",
-        f"**Completed**: {completed_str}\n",
-        f"**Generated**: {generated_at.isoformat()}\n",
+        f"- **Experiment ID**: {experiment.id}\n",
+        f"- **Started**: {started_str}\n",
+        f"- **Completed**: {completed_str}\n",
+        f"- **Generated**: {generated_at.isoformat()}\n",
         "\n",
     ]
 
