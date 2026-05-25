@@ -1,10 +1,10 @@
 # COVERS: REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036,
-#         REQ-037, REQ-038, REQ-039, REQ-040, REQ-041, REQ-042,
+#         REQ-037, REQ-038, REQ-039, REQ-040, REQ-041, REQ-042, REQ-043,
 #         NFR-002, NFR-003, NFR-004,
 #         UT-A001, UT-A002, UT-A003, UT-A004, UT-A005, UT-A006, UT-A007,
 #         UT-A008, UT-A009, UT-A010, UT-A011, UT-A012, UT-A013, UT-A014,
 #         UT-A015, UT-A016, UT-A017, UT-A018, UT-A019, UT-A020, UT-A021,
-#         UT-A022, UT-A023, UT-A024, UT-A025
+#         UT-A022, UT-A023, UT-A024, UT-A025, UT-A026, UT-A027
 
 """Unit tests for the aggregate sections of the Markdown report."""
 
@@ -891,3 +891,58 @@ def test_aggregates_byte_identical_across_two_calls(tmp_path: Path) -> None:
     r1 = _slice_aggregate_region(out1.read_text(encoding="utf-8"))
     r2 = _slice_aggregate_region(out2.read_text(encoding="utf-8"))
     assert r1 == r2
+
+
+# ---------------------------------------------------------------------------
+# UT-A026 / REQ-043 — whole-file byte equality across re-renders
+# ---------------------------------------------------------------------------
+
+
+# @sdlc REQ-043
+def test_whole_report_byte_identical_on_rerender(tmp_path: Path) -> None:
+    """Two renders of the same Experiment produce a byte-identical whole file.
+
+    Strengthens UT-A005, which only checks the aggregate region. REQ-043
+    requires the entire file (header, aggregates, Summary, Per-Trial Details)
+    to be byte-equal across re-renders.
+    """
+    exp = _make_experiment(_all_five_status_fixture())
+    out1 = tmp_path / "report1.md"
+    out2 = tmp_path / "report2.md"
+    generate_markdown_report(exp, out1)
+    generate_markdown_report(exp, out2)
+    assert out1.read_bytes() == out2.read_bytes()
+
+
+# ---------------------------------------------------------------------------
+# UT-A027 / REQ-043 — Generated timestamp derived from experiment timestamps
+# ---------------------------------------------------------------------------
+
+
+# @sdlc REQ-043
+def test_generated_timestamp_derived_from_experiment_timestamps(
+    tmp_path: Path,
+) -> None:
+    """The ``**Generated**:`` header line is derived from experiment timestamps.
+
+    Case (a): when ``completed_at`` is set, its isoformat appears in the line.
+    Case (b): when ``completed_at`` is ``None``, the line falls back to
+    ``started_at``'s isoformat.
+    In neither case is wall-clock time at render permitted to leak into the
+    header — that is what makes UT-A026's whole-file byte-equality possible.
+    """
+    # Case (a): completed_at populated (default fixture value).
+    exp_a = _make_experiment(_all_five_status_fixture())
+    out_a = tmp_path / "report_a.md"
+    generate_markdown_report(exp_a, out_a)
+    text_a = out_a.read_text(encoding="utf-8")
+    assert exp_a.completed_at is not None
+    assert f"**Generated**: {exp_a.completed_at.isoformat()}\n" in text_a
+
+    # Case (b): completed_at=None → fall back to started_at.
+    exp_b = _make_experiment(_all_five_status_fixture())
+    exp_b.completed_at = None
+    out_b = tmp_path / "report_b.md"
+    generate_markdown_report(exp_b, out_b)
+    text_b = out_b.read_text(encoding="utf-8")
+    assert f"**Generated**: {exp_b.started_at.isoformat()}\n" in text_b

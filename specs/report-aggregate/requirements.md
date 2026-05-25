@@ -8,6 +8,9 @@
 - `REQ-032` (from AC-013, AC-014, AC-015, AC-016, AC-017): ALWAYS SHALL every status cell in every aggregate section use the icon mapping already mandated by REQ-029 (`EXCELLENT` → 👍, `PASS` → ✅, `FAIL` → ❌, `TIMEOUT` → ⏱️, `ERROR` → ⚠️).
 - `REQ-033` (from AC-013): ALWAYS SHALL the aggregate sections be computed from `Experiment.results` at render time only; `results.json` shall not gain an `aggregates` field or any other byte-level change attributable to this feature.
 - `REQ-034` (from AC-013): ALWAYS SHALL two renders of the same `Experiment` instance produce byte-identical aggregate sections (deterministic ordering, formatting, and content).
+- `REQ-043`: ALWAYS SHALL repeated calls to `generate_markdown_report` on the same `Experiment` instance produce byte-identical output across the **entire file** (not only the aggregate region); to make this hold the `**Generated**` timestamp in the report header SHALL be derived from `experiment.completed_at or experiment.started_at`, not from wall-clock time. <!-- added 2026-05-25 (sdlc-document drift-report-2026-05-25T01-14-05) -->
+
+
 
 ### State-Driven (WHERE/THEN SHALL)
 - `REQ-035` (from AC-014): WHERE the Overall Status table is rendered THEN SHALL it contain exactly the columns `Status | Count | %`, with one row per status that has at least one trial, in the canonical order `EXCELLENT, PASS, FAIL, TIMEOUT, ERROR`; the `%` value SHALL be the row's count divided by total trials, rendered to one decimal place; and a bold line `**Total trials**: N` SHALL appear immediately above the table.
@@ -27,9 +30,12 @@
 
 | ID | Requirement | Target | Validated By |
 |----|-------------|--------|--------------|
-| NFR-002 | Aggregate rendering must be O(T) in the number of trials with a single pass per section. | Render time stays linear; no quadratic blow-up on M × N × T inputs. | code review + targeted unit test on a synthetic large experiment |
+| NFR-002 | Aggregate rendering must avoid super-linear blow-up in the number of trials: a single O(T) collection pass over `Experiment.results` plus per-section sorting whose total cost stays within O(T log T). | No quadratic blow-up on M × N × T inputs. <!-- relaxed 2026-05-25 (sdlc-document drift-report-2026-05-25T01-14-05): code uses sorted() on per-section buckets, adding a log T factor on top of the O(T) collection pass --> | code review + targeted unit test on a synthetic large experiment |
 | NFR-003 | `results.json` byte-content for a given Experiment must be unchanged by this feature. | Pre-feature golden JSON matches post-feature output. | regression unit test (golden-file comparison) |
 | NFR-004 | The aggregate sections must be byte-identical across repeated renders of the same Experiment. | Two successive `generate_markdown_report` calls produce identical strings for the aggregate region. | unit test (call twice, assert equality) |
 
 ## NFRs Validated Outside Code
 None — every NFR for this feature is exercised by a corresponding test.
+
+---
+*Documented from code at 2026-05-25T01-14-05. Scope: report-aggregate. Source commit: 5eaf52d.*

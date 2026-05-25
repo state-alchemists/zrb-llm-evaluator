@@ -31,6 +31,8 @@
 | UT-A023 | NFR-002 | test_aggregates_render_linear_in_trial_count | Synthetic experiment of 1_000 trials (10 models × 10 cases × 10 trials) | `generate_markdown_report` completes under a generous wall-clock budget (e.g., 2.0s) on CI; no quadratic scan over results |
 | UT-A024 | NFR-003 | test_results_json_byte_identical_to_pregolden | Reference fixture rendered post-feature | `results.json` bytes match the pre-feature golden file |
 | UT-A025 | NFR-004 | test_aggregates_byte_identical_across_two_calls | Same Experiment instance, two `generate_markdown_report` calls into different temp paths | Aggregate-region substrings are equal (duplicates the assertion target of UT-A005 with a different fixture covering all five statuses) |
+| UT-A026 | REQ-043 | test_whole_report_byte_identical_on_rerender | Same Experiment instance (covering all five statuses) rendered into two different paths via `generate_markdown_report` | Both files' full byte content is equal — including header (`**Generated**` line), aggregate region, `## Summary`, and `## Per-Trial Details` — not only the aggregate region <!-- added 2026-05-25 (sdlc-test-plan; covers REQ-043 from drift-report-2026-05-25T01-14-05) --> |
+| UT-A027 | REQ-043 | test_generated_timestamp_derived_from_experiment_timestamps | (a) Experiment with `completed_at = datetime(2024,1,1,1,0,0,tz=UTC)`; (b) Experiment with `completed_at=None` and `started_at = datetime(2024,1,1,0,0,0,tz=UTC)` — both rendered | (a) The `**Generated**:` header line contains `2024-01-01T01:00:00+00:00`; (b) the line falls back to `2024-01-01T00:00:00+00:00`; neither value depends on wall-clock time at render <!-- added 2026-05-25 (sdlc-test-plan; covers REQ-043 from drift-report-2026-05-25T01-14-05) --> |
 
 ## Integration Tests
 
@@ -55,7 +57,7 @@ N/A — no property-testing framework configured in `docs/test-strategy.md` or `
 | Uniqueness | UT-A012, UT-A014, UT-A015 | Each `model`, `test_case`, and `(model, test_case)` key appears at most once in its respective aggregate table. |
 | Atomicity | N/A | design.md declares N/A at the aggregates layer — the existing `generate_markdown_report` atomic write covers the whole file; no separate atomicity surface introduced by this feature. |
 | Validation | UT-A022 | Zero-trial Experiment exercises the defensive empty-input paths through every aggregate renderer. |
-| Idempotency | UT-A005, UT-A025 | Two successive renders of the same Experiment produce byte-identical aggregate output. |
+| Idempotency | UT-A005, UT-A025, UT-A026, UT-A027 | Two successive renders of the same Experiment produce byte-identical aggregate output (UT-A005 / UT-A025) and byte-identical whole-file output (UT-A026); the `**Generated**` timestamp is derived from `experiment.completed_at or experiment.started_at`, not wall-clock time (UT-A027). |
 
 ## Rule Coverage
 

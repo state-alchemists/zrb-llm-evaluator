@@ -104,3 +104,6 @@ Rendered for an experiment with 2 models × 2 test cases × 2 trials, one FAIL:
 |---|---|---:|---|---:|
 | openai:gpt-4o | refactor | 2 | ❌ FAIL | 31.4 |
 ```
+
+---
+*Documented from code at 2026-05-25T01-14-05. Scope: report-aggregate. Source commit: 5eaf52d. Design verified unchanged against current implementation; only NFR-002 wording and REQ-043 were added to requirements.md in this pass.*

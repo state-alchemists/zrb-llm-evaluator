@@ -42,7 +42,7 @@ The primary interface is a CLI with subcommands:
 |-------|------|--------|----------|
 | Test case validator not found or invalid | `INVALID_CASE` | Runner exits non-zero before any trial | User fixes validator module |
 | zrb chat subprocess not found | `CLI_NOT_FOUND` | Trial: ERROR, continue to next cell | User installs zrb or corrects --cli-name |
-| Subprocess timeout | `TIMEOUT` | Trial: TIMEOUT, partial log preserved | Retry with higher timeout |
+| Subprocess timeout | `TIMEOUT` | Trial: TIMEOUT, partial log preserved; the entire descendant process group is killed via `os.killpg(SIGKILL)` so `zrb chat` workers cannot outlive the timeout (REQ-005) | Retry with higher timeout |
 | Subprocess non-zero exit | `EXIT_ERROR` | Trial: ERROR (unless overridden by verification marker) | Debug via preserved log |
 | Validator raised exception | `VALIDATOR_ERROR` | Trial: ERROR with exception message | Fix validator, resume |
 | results.json write failure | `WRITE_ERROR` | Runner exits with partial results | Fix filesystem, resume (skips completed cells) |
@@ -115,4 +115,4 @@ Determinism: given the same `results.json`, repeated runs of `MarkdownReporter` 
 - `Report` is the return type of `generate_markdown_report` / `generate_json_report`; it carries the experiment id and the paths of the artifacts produced.
 
 ---
-*Documented from code at 2026-05-23T14-18-03. Scope: experiment-runner. Source commit: bab084d.*
+*Documented from code at 2026-05-25T01-05-34. Scope: experiment-runner. Source commit: 5eaf52d.*
