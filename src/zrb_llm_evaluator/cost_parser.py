@@ -92,9 +92,7 @@ def extract_tool_calls_from_history(history_path: Path) -> list[str]:
     try:
         entries = _iter_history_entries(data)
         for entry in entries:
-            name = _extract_tool_name(entry)
-            if name is not None:
-                names.append(name)
+            names.extend(_extract_tool_names(entry))
     except (TypeError, AttributeError, KeyError):
         return []
     return names
@@ -136,18 +134,42 @@ def _iter_history_entries(data: Any) -> list[dict[str, Any]]:
     return [c for c in candidates if isinstance(c, dict)]
 
 
-def _extract_tool_name(entry: dict[str, Any]) -> str | None:
-    """Return the tool name from a history entry, or ``None`` if absent."""
+def _extract_tool_names(entry: dict[str, Any]) -> list[str]:
+    """Return all tool-call names from a history entry.
+
+    Handles three known shapes:
+      * legacy bare-list entries with a top-level ``tool_name`` / ``tool_call``;
+      * ``{"role": "tool", "name": ...}`` rows;
+      * pydantic-ai ``ModelResponse`` shape, where tool calls are nested under
+        ``parts[]`` with ``part_kind == "tool-call"`` and a ``tool_name`` field.
+        A single message can contain multiple parallel tool calls — all are
+        returned in order.
+    """
+    names: list[str] = []
+    parts = entry.get("parts")
+    if isinstance(parts, list):
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            if part.get("part_kind") == "tool-call":
+                name = part.get("tool_name")
+                if isinstance(name, str) and name:
+                    names.append(name)
+    if names:
+        return names
+
     direct = entry.get("tool_name")
     if isinstance(direct, str) and direct:
-        return direct
+        names.append(direct)
+        return names
     tool_call = entry.get("tool_call")
     if isinstance(tool_call, dict):
         nested = tool_call.get("name")
         if isinstance(nested, str) and nested:
-            return nested
+            names.append(nested)
+            return names
     role = entry.get("role")
     name = entry.get("name")
     if role == "tool" and isinstance(name, str) and name:
-        return name
-    return None
+        names.append(name)
+    return names

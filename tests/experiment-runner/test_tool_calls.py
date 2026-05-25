@@ -93,3 +93,34 @@ class TestToolCallExtraction:
         p.write_text(json.dumps(data), encoding="utf-8")
         names = extract_tool_calls_from_history(p)
         assert names == ["search"]
+
+    def test_pydantic_ai_parts_shape(self, tmp_path: Path) -> None:
+        """UT-026: pydantic-ai ``parts[]`` with ``part_kind=tool-call`` is recognised.
+
+        A single message can hold multiple parallel tool calls; all are returned.
+        """
+        p = tmp_path / "h.json"
+        data = [
+            {"parts": [{"part_kind": "user-prompt", "content": "hi"}]},
+            {
+                "parts": [
+                    {"part_kind": "text", "content": "(tool call)"},
+                    {"part_kind": "tool-call", "tool_name": "Read", "args": "{}"},
+                    {"part_kind": "tool-call", "tool_name": "Grep", "args": "{}"},
+                ],
+            },
+            {
+                "parts": [
+                    {"part_kind": "tool-return", "tool_name": "Read", "content": "..."},
+                ],
+            },
+            {
+                "parts": [
+                    {"part_kind": "tool-call", "tool_name": "Edit", "args": "{}"},
+                ],
+            },
+        ]
+        p.write_text(json.dumps(data), encoding="utf-8")
+        names, count = count_tool_calls_from_history(p)
+        assert names == ["Read", "Grep", "Edit"]
+        assert count == 3
