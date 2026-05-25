@@ -11,17 +11,30 @@ from pathlib import Path
 from typing import Any
 
 # @sdlc REQ-019
+# Matches a single 💸 token-summary line emitted by zrb
+# (`zrb/llm/util/stream_response.py`). Example:
+#   💸 (Requests: 4 | Tool Calls: 7 | Total: 1500) Input: 1000 |
+#       Audio Input: 0 | Output: 500 | Audio Output: 0 |
+#       Cache Read: 200 | Cache Write: 0 | Details: {...}
+# Negative lookbehinds on ``Input:`` and ``Output:`` exclude
+# ``Audio Input:`` / ``Audio Output:`` from bleeding into the
+# ``input``/``output`` groups.
 _COST_LINE_PATTERN = re.compile(
-    r"Total tokens:\s*(?P<total>\d+)\s*\|\s*"
-    r"Input:\s*(?P<input>\d+)\s*\|\s*"
-    r"Output:\s*(?P<output>\d+)\s*\|\s*"
-    r"Cache:\s*(?P<cache>\d+)"
+    r"💸\s*\([^)]*Total:\s*(?P<total>\d+)[^)]*\)"
+    r".*?(?<!Audio\s)Input:\s*(?P<input>\d+)"
+    r".*?(?<!Audio\s)Output:\s*(?P<output>\d+)"
+    r".*?Cache Read:\s*(?P<cache>\d+)"
 )
 
 
 # @sdlc REQ-019
 def parse_cost_summary(stdout: str) -> dict[str, int]:
-    """Parse token counts from a cost summary line in stdout.
+    """Parse token counts from a zrb 💸 cost summary line in stdout.
+
+    zrb emits one ``💸 (...) Input: A | Audio Input: B | Output: C |
+    Audio Output: D | Cache Read: E | Cache Write: F | Details: {...}``
+    line per turn; totals are cumulative. When multiple 💸 lines are
+    present, only the LAST one is used so we don't double-count.
 
     Args:
     ----
@@ -40,12 +53,13 @@ def parse_cost_summary(stdout: str) -> dict[str, int]:
         "output_tokens": 0,
         "cache_read_tokens": 0,
     }
-    match = _COST_LINE_PATTERN.search(stdout)
-    if match:
-        result["total_tokens"] = int(match.group("total"))
-        result["input_tokens"] = int(match.group("input"))
-        result["output_tokens"] = int(match.group("output"))
-        result["cache_read_tokens"] = int(match.group("cache"))
+    matches = list(_COST_LINE_PATTERN.finditer(stdout))
+    if matches:
+        last = matches[-1]
+        result["total_tokens"] = int(last.group("total"))
+        result["input_tokens"] = int(last.group("input"))
+        result["output_tokens"] = int(last.group("output"))
+        result["cache_read_tokens"] = int(last.group("cache"))
     return result
 
 

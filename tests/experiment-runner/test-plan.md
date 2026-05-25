@@ -24,10 +24,10 @@
 | UT-016 | REQ-014 | test_missing_required_args_exits | run command with no args | Non-zero exit, usage printed to stderr |
 | UT-017 | REQ-015 | test_model_format_provider_colon_name | "openai:gpt-4o" | Accepted and stored as-is |
 | UT-018 | REQ-015 | test_model_format_rejects_bare_name | "gpt-4o" | Rejected with validation error |
-| UT-019 | REQ-016 | test_env_var_set_before_invocation | trial runner | ZRB_LLM_HISTORY_DIR set to per-cell output dir; --session passed to subprocess |
+| UT-019 | REQ-016 | test_env_var_set_before_invocation | trial runner | ZRB_LLM_HISTORY_DIR and ZRB_LLM_JOURNAL_DIR both set to per-cell sibling dirs; --session passed to subprocess <!-- updated 2026-05-24 (quickfix-2026-05-24T23-45-24) --> |
 | UT-020 | REQ-017 | test_results_json_atomic_write | 1 trial | results.json is valid JSON with exactly 1 TrialResult entry |
 | UT-021 | REQ-018 | test_output_dir_structure | 2 models × 1 case × 2 trials | Dirs exist: {out}/model1/case1/trial-1/, {out}/model1/case1/trial-2/ etc. |
-| UT-022 | REQ-019 | test_cost_summary_parsed | stdout containing "Total tokens: 150 \| Input: 100 \| Output: 50 \| Cache: 0" | TrialResult.total_tokens=150, input_tokens=100, output_tokens=50 |
+| UT-022 | REQ-019 | test_cost_summary_parsed | stdout containing real zrb line `💸 (Requests: 1 \| Tool Calls: 0 \| Total: 150) Input: 100 \| Audio Input: 0 \| Output: 50 \| Audio Output: 0 \| Cache Read: 0 \| Cache Write: 0 \| Details: {}` | TrialResult.total_tokens=150, input_tokens=100, output_tokens=50, cache_read_tokens=0 <!-- updated 2026-05-24 (quickfix-2026-05-24T23-45-24) --> |
 | UT-023 | REQ-019 | test_cost_summary_missing_defaults_zero | stdout with no cost line | All token fields default to 0 |
 | UT-024 | NFR-001 | test_overhead_without_llm | mock subprocess returning instantly | Wall-clock overhead < 2s |
 | UT-025 | RULE-005 | test_no_zrb_import_in_runner | runner module | No `import zrb` or `from zrb` outside test fixtures |
@@ -49,6 +49,10 @@
 | UT-041 | REQ-029 | test_markdown_report_status_icons_mapped | Parametrized: each of EXCELLENT/PASS/FAIL/TIMEOUT/ERROR | Status text begins with the icon: 👍/✅/❌/⏱️/⚠️ followed by the status name |
 | UT-042 | REQ-025 | test_markdown_report_deterministic_byte_identical | Same `results.json` rendered twice | Both renderings produce byte-identical bytes |
 | UT-043 | REQ-005 | test_timeout_kills_whole_process_group | mock subprocess that hits timeout; `os.getpgid`/`os.killpg` patched | `create_subprocess_exec` invoked with `start_new_session=True`; `os.killpg` called once with leader's pgid and `SIGKILL`; `TrialResult.status == "TIMEOUT"` <!-- added 2026-05-21 (quickfix-2026-05-21T15-03-46) --> |
+| UT-044 | REQ-019 | test_cost_summary_parsed_real_zrb_format | stdout containing real `💸 (… Total: 1500) Input: 1000 \| Audio Input: 0 \| Output: 500 \| Audio Output: 0 \| Cache Read: 200 …` and a second case with non-zero `Audio Input`/`Audio Output` | total=1500, input=1000 (not 999), output=500 (not 888), cache_read=200 <!-- added 2026-05-24 (quickfix-2026-05-24T23-45-24) --> |
+| UT-045 | REQ-019 | test_cost_summary_uses_last_line_when_multiple | stdout with two 💸 lines (Total: 100 then Total: 250) | total=250, input=150, output=100, cache_read=30; explicitly NOT the sum (350) <!-- added 2026-05-24 (quickfix-2026-05-24T23-45-24) --> |
+| UT-046 | REQ-016 | test_journal_env_var_set | trial runner with mocked subprocess | env contains `ZRB_LLM_JOURNAL_DIR`; path ends with `/llm-notes` and shares the same parent as `ZRB_LLM_HISTORY_DIR` (sibling inside cell_dir) <!-- added 2026-05-24 (quickfix-2026-05-24T23-45-24) --> |
+| UT-047 | REQ-016 | test_llm_notes_isolated_per_trial | two consecutive trials with trial_index=1 and trial_index=2 | the two captured `ZRB_LLM_JOURNAL_DIR` values differ and contain `trial-1` and `trial-2` respectively <!-- added 2026-05-24 (quickfix-2026-05-24T23-45-24) --> |
 
 ## Integration Tests
 

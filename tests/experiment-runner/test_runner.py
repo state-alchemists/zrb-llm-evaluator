@@ -304,6 +304,7 @@ class TestTrialRunner:
         call_kwargs = mock_exec.call_args.kwargs or {}
         env = call_kwargs.get("env", {})
         assert "ZRB_LLM_HISTORY_DIR" in env
+        assert "ZRB_LLM_JOURNAL_DIR" in env
 
         # Check --session was passed
         call_args = mock_exec.call_args
@@ -314,6 +315,76 @@ class TestTrialRunner:
         # otherwise every trial silently runs zrb's default model.
         assert "--model" in args_list
         assert args_list[args_list.index("--model") + 1] == "openai:gpt-4o"
+
+    @pytest.mark.asyncio
+    async def test_journal_env_var_set(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """UT-046: ZRB_LLM_JOURNAL_DIR set and is a sibling of HISTORY_DIR."""
+        config = ExperimentConfig(
+            models=["openai:gpt-4o"],
+            test_case_dirs=[tmp_path],
+            trials=1,
+            parallelism=1,
+            timeout=30,
+        )
+        output_dir = tmp_path / "out"
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"Output", b""))
+        mock_proc.returncode = 0
+
+        with patch.object(asyncio, "create_subprocess_exec") as mock_exec:
+            mock_exec.return_value = mock_proc
+            runner = TrialRunner(config, sample_test_case, output_dir)
+            await runner.run("openai:gpt-4o", 1)
+
+        call_kwargs = mock_exec.call_args.kwargs or {}
+        env = call_kwargs.get("env", {})
+        assert "ZRB_LLM_JOURNAL_DIR" in env
+        journal_dir = Path(env["ZRB_LLM_JOURNAL_DIR"])
+        history_dir = Path(env["ZRB_LLM_HISTORY_DIR"])
+        # Path ends with /llm-notes
+        assert journal_dir.name == "llm-notes"
+        # Sibling of history/ inside the same cell_dir
+        assert journal_dir.parent == history_dir.parent
+
+    @pytest.mark.asyncio
+    async def test_llm_notes_isolated_per_trial(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """UT-047: Each trial gets its own ZRB_LLM_JOURNAL_DIR."""
+        config = ExperimentConfig(
+            models=["openai:gpt-4o"],
+            test_case_dirs=[tmp_path],
+            trials=2,
+            parallelism=1,
+            timeout=30,
+        )
+        output_dir = tmp_path / "out"
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"Output", b""))
+        mock_proc.returncode = 0
+
+        captured_envs: list[dict[str, str]] = []
+
+        async def capturing_create(*args: object, **kwargs: object) -> AsyncMock:
+            env = kwargs.get("env", {})
+            captured_envs.append(dict(env))
+            return mock_proc
+
+        with patch.object(asyncio, "create_subprocess_exec", capturing_create):
+            runner = TrialRunner(config, sample_test_case, output_dir)
+            await runner.run("openai:gpt-4o", 1)
+            await runner.run("openai:gpt-4o", 2)
+
+        assert len(captured_envs) == 2
+        journal_1 = captured_envs[0]["ZRB_LLM_JOURNAL_DIR"]
+        journal_2 = captured_envs[1]["ZRB_LLM_JOURNAL_DIR"]
+        assert journal_1 != journal_2
+        assert "trial-1" in journal_1
+        assert "trial-2" in journal_2
 
     @pytest.mark.asyncio
     async def test_output_dir_structure(
@@ -389,7 +460,9 @@ class TestCostParser:
         """UT-022: Parse cost line with all fields."""
         stdout = (
             "Some text\n"
-            "Total tokens: 150 | Input: 100 | Output: 50 | Cache: 0\n"
+            "💸 (Requests: 1 | Tool Calls: 0 | Total: 150) "
+            "Input: 100 | Audio Input: 0 | Output: 50 | Audio Output: 0 | "
+            "Cache Read: 0 | Cache Write: 0 | Details: {}\n"
             "More text\n"
         )
         result = parse_cost_summary(stdout)
@@ -397,6 +470,54 @@ class TestCostParser:
         assert result["input_tokens"] == 100
         assert result["output_tokens"] == 50
         assert result["cache_read_tokens"] == 0
+
+    def test_cost_summary_parsed_real_zrb_format(self) -> None:
+        """UT-044: Parse the real zrb 💸 cost line; ignore Audio Input/Output."""
+        stdout = (
+            "Some preamble line\n"
+            "💸 (Requests: 4 | Tool Calls: 7 | Total: 1500) "
+            "Input: 1000 | Audio Input: 0 | Output: 500 | Audio Output: 0 | "
+            "Cache Read: 200 | Cache Write: 0 | Details: {}\n"
+            "Trailing text\n"
+        )
+        result = parse_cost_summary(stdout)
+        assert result["total_tokens"] == 1500
+        assert result["input_tokens"] == 1000
+        assert result["output_tokens"] == 500
+        assert result["cache_read_tokens"] == 200
+
+        # Second case: non-zero Audio Input/Output must NOT bleed into
+        # Input/Output. This proves the negative lookbehind anchors hold.
+        stdout2 = (
+            "💸 (Requests: 1 | Tool Calls: 0 | Total: 1500) "
+            "Input: 1000 | Audio Input: 999 | Output: 500 | "
+            "Audio Output: 888 | Cache Read: 200 | Cache Write: 0 | "
+            "Details: {}\n"
+        )
+        result2 = parse_cost_summary(stdout2)
+        assert result2["input_tokens"] == 1000
+        assert result2["input_tokens"] != 999
+        assert result2["output_tokens"] == 500
+        assert result2["output_tokens"] != 888
+
+    def test_cost_summary_uses_last_line_when_multiple(self) -> None:
+        """UT-045: When multiple 💸 lines appear, only the LAST is used."""
+        stdout = (
+            "💸 (Requests: 1 | Tool Calls: 0 | Total: 100) "
+            "Input: 60 | Audio Input: 0 | Output: 40 | Audio Output: 0 | "
+            "Cache Read: 10 | Cache Write: 0 | Details: {}\n"
+            "intermediate output\n"
+            "💸 (Requests: 2 | Tool Calls: 1 | Total: 250) "
+            "Input: 150 | Audio Input: 0 | Output: 100 | Audio Output: 0 | "
+            "Cache Read: 30 | Cache Write: 0 | Details: {}\n"
+        )
+        result = parse_cost_summary(stdout)
+        assert result["total_tokens"] == 250
+        assert result["input_tokens"] == 150
+        assert result["output_tokens"] == 100
+        assert result["cache_read_tokens"] == 30
+        # Explicitly NOT the sum of the two lines (would be 350).
+        assert result["total_tokens"] != 350
 
     def test_cost_summary_missing_defaults_zero(self) -> None:
         """UT-023: No cost line => all zero."""
@@ -407,12 +528,18 @@ class TestCostParser:
         assert result["output_tokens"] == 0
         assert result["cache_read_tokens"] == 0
 
-    def test_cost_summary_partial_defaults(self) -> None:
-        """Partial cost line still returns defaults."""
-        stdout = "Total tokens: 100 | Input: 50 | Output: | Cache:\n"
+    def test_cost_summary_partial_zrb_line_returns_zero(self) -> None:
+        """Partial 💸 line missing Cache Read/Write returns all zeros."""
+        stdout = (
+            "💸 (Requests: 1 | Tool Calls: 0 | Total: 100) "
+            "Input: 50 | Audio Input: 0 | Output: 50 | Audio Output: 0\n"
+        )
         result = parse_cost_summary(stdout)
-        # The pattern won't match because Output/Cache don't have numbers
+        # The pattern won't match because Cache Read is absent.
         assert result["total_tokens"] == 0
+        assert result["input_tokens"] == 0
+        assert result["output_tokens"] == 0
+        assert result["cache_read_tokens"] == 0
 
 
 class TestVerificationMarker:

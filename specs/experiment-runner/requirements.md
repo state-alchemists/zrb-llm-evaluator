@@ -36,10 +36,10 @@
 
 ### Mandatory (SHALL)
 - `REQ-015` (from AC-001): The runner SHALL accept models in `provider:model_name` format (e.g., `openai:gpt-4o`).
-- `REQ-016` (from AC-003): The runner SHALL set `ZRB_LLM_HISTORY_DIR` and pass `--session` to each `zrb chat` invocation.
+- `REQ-016` (from AC-003): The runner SHALL set `ZRB_LLM_HISTORY_DIR` and `ZRB_LLM_JOURNAL_DIR` to per-cell sibling directories of `workdir/`, and SHALL pass `--session` to each `zrb chat` invocation, so that conversation history and journal notes are isolated per trial. <!-- updated 2026-05-24 (quickfix-2026-05-24T23-45-24) -->
 - `REQ-017` (from AC-005): The runner SHALL write each completed `TrialResult` to `results.json` immediately upon finishing.
 - `REQ-018` (from AC-001): The runner SHALL create a per-cell output directory: `{output_dir}/{model_safe}/{test_case}/trial-{N}/`.
-- `REQ-019`: The runner SHALL parse the cost summary line from subprocess stdout and populate token fields in `TrialResult`.
+- `REQ-019`: The runner SHALL parse the zrb `💸` usage summary line from subprocess stdout — matching the actual zrb format `💸 (Requests: … | Tool Calls: … | Total: T) Input: I | Audio Input: … | Output: O | Audio Output: … | Cache Read: C | …` — and populate `total_tokens`, `input_tokens`, `output_tokens`, and `cache_read_tokens` in `TrialResult`. WHERE multiple summary lines appear, ONLY the LAST one SHALL be used (zrb's per-run totals are already cumulative across turns; summing would double-count). <!-- updated 2026-05-24 (quickfix-2026-05-24T23-45-24) -->
 - `REQ-023` (from AC-008): The runner SHALL stage the test case's `workdir/` contents into the trial's nested `workdir/` directory, never into the cell directory itself.
 - `REQ-024` (from AC-008): The runner SHALL ensure that `validator.py`, `instruction.txt`, and any other test-case metadata files are never copied into the trial's `workdir/`.
 
