@@ -48,7 +48,7 @@ def _make_case(
     (case_dir / "validator.py").write_text(
         "from zrb_llm_evaluator.models import ValidationResult\n"
         "class V:\n"
-        "    def validate(self, output_dir, log_content):\n"
+        "    def validate(self, output_dir, log_content, trace=None):\n"
         "        return ValidationResult(status='PASS', score=1.0, details=[])\n"
         "validator = V()\n",
         encoding="utf-8",

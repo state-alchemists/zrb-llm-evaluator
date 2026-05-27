@@ -96,7 +96,7 @@ from zrb_llm_evaluator.protocols import ValidatorProtocol
 class SimpleValidator:
     """A test validator that always returns PASS."""
 
-    def validate(self, output_dir: Path, log_content: str) -> ValidationResult:
+    def validate(self, output_dir: Path, log_content: str, trace=None) -> ValidationResult:
         return ValidationResult(
             status="PASS",
             score=0.9,

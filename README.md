@@ -70,11 +70,16 @@ my-cases/<test-name>/
 ```python
 # my-cases/hello-world/validator.py
 from pathlib import Path
-from zrb_llm_evaluator.models import ValidationResult, ValidationCheck
+from zrb_llm_evaluator.models import TrialTrace, ValidationResult, ValidationCheck
 from zrb_llm_evaluator.protocols import ValidatorProtocol
 
 class HelloValidator:
-    def validate(self, output_dir: Path, log_content: str) -> ValidationResult:
+    def validate(
+        self,
+        output_dir: Path,
+        log_content: str,
+        trace: TrialTrace | None = None,
+    ) -> ValidationResult:
         passed = "hello, world" in log_content.lower()
         return ValidationResult(
             status="PASS" if passed else "FAIL",
@@ -93,6 +98,17 @@ validator = HelloValidator()
 ```
 
 The framework validates protocol conformance at load time. `validator.py` that doesn't implement `ValidatorProtocol` is rejected before any trial runs.
+
+The `trace` parameter is a `TrialTrace` parsed from the per-trial session history. It exposes:
+
+- `tool_calls: list[ToolCallRecord]` — every tool invocation with `name` and `args` dict
+- `tool_names: list[str]` — convenience list of just the names, in order
+- `assistant_text: str` — concatenated assistant message text
+- `turn_count: int`
+
+Use it to assert *how* the agent succeeded (e.g., "called the right tool", "iterated at least twice", "never invoked an HTTP tool with secret values") rather than only the final filesystem state. Validators that don't need trajectory data can ignore the parameter.
+
+The reporter aggregates trials across `(model, test_case)` cells and surfaces a **Stability** section: a cell with mixed pass/fail across trials is flagged 🟡 FLAKY — a one-off lucky pass is no longer indistinguishable from a deterministic pass. This section is suppressed when every cell has a single trial (stability is undefined with N=1).
 
 ### ValidationResult
 

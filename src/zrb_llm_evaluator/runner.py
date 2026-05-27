@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Literal
 
 from zrb_llm_evaluator.cost_parser import (
+    build_trial_trace,
     count_tool_calls_from_history,
     parse_cost_summary,
 )
@@ -368,9 +369,11 @@ class TrialRunner:
             if status not in ("TIMEOUT", "ERROR") and self._test_case.validator is not None:
                 try:
                     # @sdlc REQ-009
+                    trace = build_trial_trace(history_log_path)
                     verification_result = self._test_case.validator.validate(
                         output_dir=nested_workdir,
                         log_content=full_output,
+                        trace=trace,
                     )
                     # Validator result determines final status for clean exits
                     if verification_marker is None:

@@ -1,7 +1,8 @@
-# COVERS: REQ-001, REQ-003, REQ-004, REQ-005, REQ-007, REQ-008, REQ-009, REQ-011,
-#   REQ-012, REQ-016, REQ-017, REQ-018, REQ-019, NFR-001,
+# COVERS: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-007, REQ-008, REQ-009,
+#   REQ-010, REQ-011, REQ-012, REQ-016, REQ-017, REQ-018, REQ-019, NFR-001,
 #   UT-003, UT-004, UT-005, UT-007, UT-008, UT-009, UT-010, UT-011,
-#   UT-013, UT-014, UT-019, UT-020, UT-021, UT-024, UT-043
+#   UT-013, UT-014, UT-019, UT-020, UT-021, UT-024, UT-043,
+#   UT-048, UT-051, UT-052, UT-056
 
 """Tests for the runner module."""
 
@@ -24,7 +25,9 @@ from zrb_llm_evaluator.models import (
 from zrb_llm_evaluator.runner import (
     ResumeManager,
     TrialRunner,
+    WorkSteward,
     _extract_verification_marker,
+    _load_or_init_experiment,
     build_cell_plan,
 )
 
@@ -317,6 +320,37 @@ class TestTrialRunner:
         assert args_list[args_list.index("--model") + 1] == "openai:gpt-4o"
 
     @pytest.mark.asyncio
+    async def test_env_prefix_custom(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """UT-048: env_prefix="MYAPP" => MYAPP_LLM_HISTORY_DIR, MYAPP_LLM_JOURNAL_DIR."""
+        config = ExperimentConfig(
+            models=["openai:gpt-4o"],
+            test_case_dirs=[tmp_path],
+            trials=1,
+            parallelism=1,
+            timeout=30,
+            env_prefix="MYAPP",
+        )
+        output_dir = tmp_path / "out"
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"Output", b""))
+        mock_proc.returncode = 0
+
+        with patch.object(asyncio, "create_subprocess_exec") as mock_exec:
+            mock_exec.return_value = mock_proc
+            runner = TrialRunner(config, sample_test_case, output_dir)
+            await runner.run("openai:gpt-4o", 1)
+
+        call_kwargs = mock_exec.call_args.kwargs or {}
+        env = call_kwargs.get("env", {})
+        assert "MYAPP_LLM_HISTORY_DIR" in env
+        assert "MYAPP_LLM_JOURNAL_DIR" in env
+        assert "ZRB_LLM_HISTORY_DIR" not in env
+        assert "ZRB_LLM_JOURNAL_DIR" not in env
+
+    @pytest.mark.asyncio
     async def test_journal_env_var_set(
         self, tmp_path: Path, sample_test_case
     ) -> None:
@@ -452,6 +486,62 @@ class TestTrialRunner:
 
         assert elapsed < 2.0, f"Overhead {elapsed:.3f}s exceeds 2s limit"
 
+    @pytest.mark.asyncio
+    async def test_results_json_concurrent_append(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """UT-052: Concurrent appends => valid JSON with all entries, no corruption."""
+        output_dir = tmp_path / "out-concurrent"
+        output_dir.mkdir(parents=True)
+        results_path = output_dir / "results.json"
+        mgr = ResumeManager(results_path)
+
+        async def append_one(i: int) -> None:
+            result = TrialResult(
+                model="openai:gpt-4o",
+                test_case=sample_test_case.name,
+                trial_index=i,
+                status="PASS",
+                duration=0.1,
+                exit_code=0,
+                log_path=str(tmp_path / f"{i}.log"),
+            )
+            mgr.append(result)
+
+        await asyncio.gather(*[append_one(i) for i in range(1, 11)])
+
+        assert results_path.exists()
+        raw = results_path.read_text(encoding="utf-8")
+        data = json.loads(raw)
+        assert len(data) == 10
+
+        trial_indices = {entry["trial_index"] for entry in data}
+        assert trial_indices == set(range(1, 11))
+
+
+class TestExperimentLifecycle:
+    """Tests for experiment lifecycle — @sdlc REQ-003, REQ-017."""
+
+    def test_load_or_init_experiment_corrupt_json(
+        self, tmp_path: Path,
+    ) -> None:
+        """UT-051: Corrupt experiment.json => fresh experiment created (no crash)."""
+        output_dir = tmp_path / "out"
+        output_dir.mkdir(parents=True)
+        experiment_path = output_dir / "experiment.json"
+        experiment_path.write_text("{bad json", encoding="utf-8")
+
+        config = ExperimentConfig(
+            models=["openai:gpt-4o"],
+            test_case_dirs=["/tmp/case"],
+            trials=1,
+        )
+        experiment = _load_or_init_experiment(experiment_path, config)
+
+        assert experiment.config == config
+        assert experiment.results == []
+        assert experiment.completed_at is None
+
 
 class TestCostParser:
     """Tests for cost summary parsing — @sdlc REQ-019."""
@@ -581,7 +671,7 @@ class TestRunnerValidatorIntegration:
 
         calls = []
         class TrackingValidator:
-            def validate(self, output_dir, log_content):
+            def validate(self, output_dir, log_content, trace=None):
                 calls.append((output_dir, log_content))
                 return ValidationResult(status="PASS", score=1.0, details=[])
 
@@ -589,7 +679,7 @@ class TestRunnerValidatorIntegration:
             "from pathlib import Path\n"
             "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
             "class TV:\n"
-            "    def validate(self, output_dir, log_content):\n"
+            "    def validate(self, output_dir, log_content, trace=None):\n"
             "        return ValidationResult(status='PASS', score=1.0, details=[])\n"
             "validator = TV()\n"
         )
@@ -627,7 +717,7 @@ class TestRunnerValidatorIntegration:
 
         captured_log = None
         class LogCapturingValidator:
-            def validate(self, output_dir, log_content):
+            def validate(self, output_dir, log_content, trace=None):
                 nonlocal captured_log
                 captured_log = log_content
                 return ValidationResult(status="PASS", score=1.0, details=[])
@@ -636,7 +726,7 @@ class TestRunnerValidatorIntegration:
             "from pathlib import Path\n"
             "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
             "class LCV:\n"
-            "    def validate(self, output_dir, log_content):\n"
+            "    def validate(self, output_dir, log_content, trace=None):\n"
             "        return ValidationResult(status='PASS', score=1.0, details=[])\n"
             "validator = LCV()\n"
         )
@@ -688,7 +778,7 @@ class TestRunnerValidatorIntegration:
         original_validator = sample_test_case.validator
 
         class BrokenValidator:
-            def validate(self, output_dir, log_content):
+            def validate(self, output_dir, log_content, trace=None):
                 msg = "bad check"
                 raise ValueError(msg)
 
@@ -772,3 +862,59 @@ class TestRunnerValidatorIntegration:
         data = json.loads(raw)
         assert len(data) == 1
         assert data[0]["model"] == "openai:gpt-4o"
+
+
+class TestWorkStewardParallel:
+    """Tests for WorkSteward parallel execution — @sdlc REQ-002, REQ-010."""
+
+    @pytest.mark.asyncio
+    async def test_parallel_execution_work_steward(
+        self, tmp_path: Path,
+    ) -> None:
+        """UT-056: 3 models x 1 case x 2 trials = 6 cells, parallelism=3.
+
+        Verifies WorkSteward bounded concurrency: all 6 results have terminal
+        statuses and results.json has 6 entries.
+        """
+        case_dir = tmp_path / "p-case"
+        case_dir.mkdir(parents=True, exist_ok=True)
+        (case_dir / "instruction.txt").write_text("Test", encoding="utf-8")
+        (case_dir / "validator.py").write_text(
+            "from pathlib import Path\n"
+            "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
+            "class V:\n"
+            "    def validate(self, output_dir, log_content, trace=None):\n"
+            "        return ValidationResult(status='PASS', score=0.9, details=[])\n"
+            "validator = V()\n"
+        )
+
+        from zrb_llm_evaluator.loader import load_test_case
+
+        tc = load_test_case(case_dir)
+
+        config = ExperimentConfig(
+            models=["test:m1", "test:m2", "test:m3"],
+            test_case_dirs=[case_dir],
+            trials=2,
+            parallelism=3,
+            timeout=30,
+            cli_name="echo",
+        )
+        output_dir = tmp_path / "out"
+        results_path = output_dir / "results.json"
+        mgr = ResumeManager(results_path)
+        steward = WorkSteward(config, [tc], output_dir, mgr)
+
+        results = await steward.run_all()
+
+        assert len(results) == 6
+
+        terminal_statuses = {"EXCELLENT", "PASS", "FAIL", "TIMEOUT", "ERROR"}
+        for r in results:
+            assert r.status in terminal_statuses, (
+                f"Non-terminal status: {r.status}"
+            )
+
+        assert results_path.exists()
+        data = json.loads(results_path.read_text(encoding="utf-8"))
+        assert len(data) == 6

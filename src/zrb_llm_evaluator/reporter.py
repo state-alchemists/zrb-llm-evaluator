@@ -295,6 +295,52 @@ def _render_grid(b: _AggregateBuckets) -> list[str]:
     return lines
 
 
+def _render_stability(b: _AggregateBuckets) -> list[str]:
+    """Render the Stability section: per-(model, test_case) pass-rate gate.
+
+    A cell is STABLE only if every trial reaches a passing terminal status
+    (EXCELLENT or PASS). Any mix of pass/fail (or fail/timeout/error) flags
+    the cell FLAKY — that's the signal users actually need: a one-off lucky
+    pass should not be reported as the same thing as a 3/3. BROKEN means
+    zero trials passed.
+
+    The section is suppressed when ``trials==1`` for every cell, since
+    stability is undefined with a single observation.
+    """
+    cells: list[tuple[str, str, int, int]] = []  # (model, case, passing, total)
+    for (model, case), trials in b.by_cell.items():
+        total = len(trials)
+        passing = sum(
+            1 for t in trials if t.status in _BOLD_ELIGIBLE_STATUSES
+        )
+        cells.append((model, case, passing, total))
+
+    if all(total == 1 for _, _, _, total in cells):
+        return []
+
+    lines: list[str] = ["\n## Stability\n\n"]
+    lines.append("Per-(model, test case) pass rate across trials. ")
+    lines.append(
+        "🟢 stable = all trials passed; 🟡 flaky = mixed; 🔴 broken = none passed.\n\n"
+    )
+    lines.append("| Model | Test Case | Pass Rate | Stability |\n")
+    lines.append("|-------|-----------|-----------|-----------|\n")
+    for model, case, passing, total in sorted(cells):
+        if total <= 0:
+            continue
+        rate = passing / total
+        if passing == total:
+            icon = "🟢 STABLE"
+        elif passing == 0:
+            icon = "🔴 BROKEN"
+        else:
+            icon = "🟡 FLAKY"
+        lines.append(
+            f"| {model} | {case} | {passing}/{total} ({rate * 100:.0f}%) | {icon} |\n"
+        )
+    return lines
+
+
 # @sdlc REQ-040, REQ-041
 def _render_failing(b: _AggregateBuckets) -> list[str]:
     """Render the Failing / Timeout Trials section."""
@@ -399,6 +445,7 @@ def generate_markdown_report(experiment: Experiment, output_path: Path) -> Repor
     lines.extend(_render_by_model(aggregates))
     lines.extend(_render_by_test_case(aggregates))
     lines.extend(_render_grid(aggregates))
+    lines.extend(_render_stability(aggregates))
     lines.extend(_render_failing(aggregates))
 
     lines.append("\n## Summary\n\n")

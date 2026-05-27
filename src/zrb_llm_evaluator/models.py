@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -29,6 +29,34 @@ class ValidationResult(BaseModel):
     status: Literal["EXCELLENT", "PASS", "FAIL"]
     score: float = Field(ge=0.0, le=1.0)
     details: list[ValidationCheck] = Field(default_factory=list)
+
+
+class ToolCallRecord(BaseModel):
+    """A single tool invocation observed in the trial history.
+
+    Surfaced to validators via :class:`TrialTrace` so they can assert on
+    the agent's trajectory (which tools it used, in what order, with what
+    arguments) rather than only on the final filesystem state.
+    """
+
+    name: str
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
+class TrialTrace(BaseModel):
+    """Structured view of a trial's recorded session history.
+
+    Built by the runner from ``history/<session>.json`` and passed to the
+    validator alongside ``output_dir`` and ``log_content``. Defensive by
+    construction: when the history file is missing or malformed, the
+    trace is empty rather than raising — validators should treat empty
+    fields as "no signal" not "agent did nothing".
+    """
+
+    tool_calls: list[ToolCallRecord] = Field(default_factory=list)
+    tool_names: list[str] = Field(default_factory=list)
+    assistant_text: str = ""
+    turn_count: int = 0
 
 
 # @sdlc REQ-001, REQ-005, REQ-007, REQ-008, REQ-009, REQ-017, REQ-019, RULE-003
