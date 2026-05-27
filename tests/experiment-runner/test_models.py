@@ -1,4 +1,4 @@
-# COVERS: REQ-015, REQ-019, UT-017, UT-018, UT-022, UT-023
+# COVERS: REQ-015, REQ-019, UT-017, UT-018, UT-022, UT-023, UT-049
 
 """Tests for Pydantic models."""
 
@@ -63,6 +63,16 @@ class TestExperimentConfig:
                 test_case_dirs=["/tmp/case"],
                 trials=1,
                 timeout=10,
+            )
+
+    def test_cli_name_empty_rejected(self) -> None:
+        """UT-049: Empty cli_name is rejected."""
+        with pytest.raises(ValidationError):
+            ExperimentConfig(
+                models=["openai:gpt-4o"],
+                test_case_dirs=["/tmp/case"],
+                trials=1,
+                cli_name="",
             )
 
 

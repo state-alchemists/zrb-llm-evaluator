@@ -1,4 +1,4 @@
-# COVERS: REQ-014, UT-016
+# COVERS: REQ-014, REQ-017, UT-016, UT-050
 
 """Tests for CLI argument validation."""
 
@@ -36,7 +36,7 @@ class TestCLIRequiredArgs:
             "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
             "from zrb_llm_evaluator.protocols import ValidatorProtocol\n"
             "class V:\n"
-            "    def validate(self, output_dir, log_content):\n"
+            "    def validate(self, output_dir, log_content, trace=None):\n"
             "        return ValidationResult(status='PASS', score=0.5, details=[])\n"
             "validator = V()\n"
         )
@@ -57,3 +57,15 @@ class TestCLIRequiredArgs:
         )
         # Either exits 0 (runs) or non-zero (subprocess or other error) - not a parse error
         assert result.exit_code in (0, 1, 2)
+
+    def test_report_command_corrupt_json(self, tmp_path) -> None:
+        """UT-050: Corrupt experiment.json => report subcommand exits non-zero."""
+        out_dir = tmp_path / "out"
+        out_dir.mkdir(parents=True)
+        (out_dir / "experiment.json").write_text("{bad json", encoding="utf-8")
+
+        result = runner.invoke(
+            app,
+            ["report", "--dir", str(out_dir)],
+        )
+        assert result.exit_code != 0

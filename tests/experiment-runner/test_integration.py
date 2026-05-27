@@ -34,7 +34,7 @@ class TestRunCommandFullPipeline:
                 "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
                 "from zrb_llm_evaluator.protocols import ValidatorProtocol\n"
                 "class V:\n"
-                "    def validate(self, output_dir, log_content):\n"
+                "    def validate(self, output_dir, log_content, trace=None):\n"
                 "        return ValidationResult(status='PASS', score=0.9, details=[])\n"
                 "validator = V()\n"
             )
@@ -94,7 +94,7 @@ class TestResumeMidExperiment:
             "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
             "from zrb_llm_evaluator.protocols import ValidatorProtocol\n"
             "class V:\n"
-            "    def validate(self, output_dir, log_content):\n"
+            "    def validate(self, output_dir, log_content, trace=None):\n"
             "        return ValidationResult(status='PASS', score=0.9, details=[])\n"
             "validator = V()\n"
         )
@@ -147,7 +147,7 @@ class TestParallelExecution:
             "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
             "from zrb_llm_evaluator.protocols import ValidatorProtocol\n"
             "class V:\n"
-            "    def validate(self, output_dir, log_content):\n"
+            "    def validate(self, output_dir, log_content, trace=None):\n"
             "        return ValidationResult(status='PASS', score=0.9, details=[])\n"
             "validator = V()\n"
         )
@@ -193,7 +193,7 @@ class TestCustomValidatorExecuted:
             "from pathlib import Path\n"
             "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
             "class ExcellentValidator:\n"
-            "    def validate(self, output_dir, log_content):\n"
+            "    def validate(self, output_dir, log_content, trace=None):\n"
             "        return ValidationResult(status='EXCELLENT', score=0.95, details=[])\n"
             "validator = ExcellentValidator()\n"
         )
@@ -239,7 +239,7 @@ class TestStress100Cells:
             "from zrb_llm_evaluator.models import ValidationResult, ValidationCheck\n"
             "from zrb_llm_evaluator.protocols import ValidatorProtocol\n"
             "class V:\n"
-            "    def validate(self, output_dir, log_content):\n"
+            "    def validate(self, output_dir, log_content, trace=None):\n"
             "        return ValidationResult(status='PASS', score=0.9, details=[])\n"
             "validator = V()\n"
         )
