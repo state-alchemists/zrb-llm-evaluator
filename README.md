@@ -172,7 +172,7 @@ The runner has four layers:
 3. **Runner** (`runner.py`) — Async subprocess orchestration with `asyncio.Semaphore`, `asyncio.wait_for`, and `ResumeManager` for idempotent resumption. Each trial creates an isolated directory `{output}/{model_safe}/{test_case}/trial-{N}/` (colons in the model name are sanitized) with its own history directory
 4. **Reporter** (`reporter.py`) — Generates Markdown and JSON output with atomic file writes
 
-Key design decisions are documented in `docs/adr/`.
+Key design decisions are documented in `.sdlc/docs/adr/`.
 
 ## Output Structure
 

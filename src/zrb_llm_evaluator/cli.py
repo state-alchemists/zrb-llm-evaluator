@@ -1,4 +1,4 @@
-# GENERATED FROM SPEC: specs/experiment-runner/requirements.md
+# GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
 # IMPLEMENTS: REQ-004, REQ-014, REQ-015, REQ-016, RULE-011, RULE-012
 
 """Typer CLI entry point for the experiment runner."""

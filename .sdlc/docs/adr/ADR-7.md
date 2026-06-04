@@ -69,4 +69,4 @@ Invariants:
 
 ## References
 - ADR-6 (per-cell filesystem layout — refined by this ADR)
-- US-008 / AC-008 / AC-009 in `requirements/problem-brief.md`
+- US-008 / AC-008 / AC-009 in `.sdlc/requirements/problem-brief.md`

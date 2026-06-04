@@ -54,6 +54,6 @@ The `MarkdownReporter` is extended with an **aggregates pre-section** that is em
   - `results.json` is byte-identical before/after the aggregates change for the same experiment.
 
 ## References
-- requirements/problem-brief.md — US-010, AC-013, AC-014, AC-015, AC-016, AC-017
-- docs/adr/ADR-8.md — companion decision for the existing report sections
-- docs/architecture.md — `MarkdownReporter` component
+- .sdlc/requirements/problem-brief.md — US-010, AC-013, AC-014, AC-015, AC-016, AC-017
+- .sdlc/docs/adr/ADR-8.md — companion decision for the existing report sections
+- .sdlc/docs/architecture.md — `MarkdownReporter` component

@@ -1,4 +1,4 @@
-# GENERATED FROM SPEC: specs/experiment-runner/requirements.md
+# GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
 # IMPLEMENTS: REQ-009, REQ-011, REQ-013, RULE-001, RULE-004
 
 """Protocol definitions for pluggable validators."""

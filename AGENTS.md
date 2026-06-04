@@ -22,6 +22,7 @@ zrb-llm-evaluator run --models openai:gpt-4o google-gla:gemini-2.5-flash
 | Directory | Purpose |
 |-----------|---------|
 | `src/zrb_llm_evaluator/` | Source code (runner, models, report) |
-| `docs/product.md` | Product vision |
-| `docs/tech.md` | Tech decisions |
-| `docs/test-strategy.md` | Testing approach |
+| `.sdlc/docs/product.md` | Product vision |
+| `.sdlc/docs/tech.md` | Tech decisions |
+| `.sdlc/docs/test-strategy.md` | Testing approach |
+| `.sdlc/rules.md` | Project constitution (invariants) |

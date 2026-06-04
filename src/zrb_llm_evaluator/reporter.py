@@ -1,5 +1,5 @@
-# GENERATED FROM SPEC: specs/experiment-runner/requirements.md,
-#                      specs/report-aggregate/requirements.md
+# GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md,
+#                      .sdlc/specs/report-aggregate/spec.md
 # IMPLEMENTS: REQ-003, REQ-017, REQ-025, REQ-026, REQ-027, REQ-028, REQ-029,
 #             REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036,
 #             REQ-037, REQ-038, REQ-039, REQ-040, REQ-041, REQ-042,

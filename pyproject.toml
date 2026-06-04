@@ -1,4 +1,4 @@
-# GENERATED FROM SPEC: specs/experiment-runner/requirements.md
+# GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
 # IMPLEMENTS: REQ-006, REQ-014, RULE-006
 
 [build-system]

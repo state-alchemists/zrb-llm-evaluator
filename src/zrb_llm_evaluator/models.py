@@ -1,4 +1,4 @@
-# GENERATED FROM SPEC: specs/experiment-runner/requirements.md
+# GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
 # IMPLEMENTS: REQ-003, REQ-015, REQ-017, REQ-019, NFR-002, RULE-001, RULE-003
 
 """Pydantic v2 models for the experiment runner."""

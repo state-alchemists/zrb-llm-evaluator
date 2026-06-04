@@ -32,5 +32,5 @@ The `MarkdownReporter` renders `report.md` with these conventions:
 - Unit tests on `MarkdownReporter` cover: sort order across mixed models/cases/trials, best-metric computation (including ties and FAIL/TIMEOUT/ERROR exclusion), and all five status-icon mappings.
 
 ## References
-- requirements/problem-brief.md — US-009, AC-010, AC-011, AC-012
-- docs/architecture.md — `MarkdownReporter` component
+- .sdlc/requirements/problem-brief.md — US-009, AC-010, AC-011, AC-012
+- .sdlc/docs/architecture.md — `MarkdownReporter` component

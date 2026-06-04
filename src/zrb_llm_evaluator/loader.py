@@ -1,4 +1,4 @@
-# GENERATED FROM SPEC: specs/experiment-runner/requirements.md
+# GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
 # IMPLEMENTS: REQ-013, REQ-015, REQ-024, RULE-001, RULE-004
 
 """Test case discovery, loading, and validation."""
