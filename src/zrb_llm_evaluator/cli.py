@@ -27,7 +27,7 @@ def _get_cli_version(cli_name: str) -> str:
     """Return the version string for ``cli_name``, or '' on failure."""
     try:
         result = subprocess.run(
-            [cli_name, "--version"],
+            [cli_name, "version"],
             capture_output=True,
             text=True,
             timeout=10,
