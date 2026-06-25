@@ -1,4 +1,4 @@
-# COVERS: REQ-002, REQ-010, UT-002, UT-012
+# COVERS: EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-010, EXPERIMENT-RUNNER:UT-002, EXPERIMENT-RUNNER:UT-012
 
 """Tests for semaphore-based concurrency control."""
 
@@ -11,11 +11,11 @@ import pytest
 
 
 class TestSemaphoreConcurrency:
-    """Tests for concurrency control — @sdlc REQ-002, REQ-010."""
+    """Tests for concurrency control — @sdlc EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-010."""
 
     @pytest.mark.asyncio
     async def test_semaphore_limits_concurrent_trials(self) -> None:
-        """UT-002: At most 4 tasks running simultaneously with parallelism=4."""
+        """EXPERIMENT-RUNNER:UT-002: At most 4 tasks running simultaneously with parallelism=4."""
         semaphore = asyncio.Semaphore(4)
 
         running = 0
@@ -39,7 +39,7 @@ class TestSemaphoreConcurrency:
 
     @pytest.mark.asyncio
     async def test_parallelism_1_sequential(self) -> None:
-        """UT-012: With parallelism=1, trials execute one after another."""
+        """EXPERIMENT-RUNNER:UT-012: With parallelism=1, trials execute one after another."""
         semaphore = asyncio.Semaphore(1)
 
         start_times: list[float] = []

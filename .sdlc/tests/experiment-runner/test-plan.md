@@ -53,6 +53,18 @@
 | UT-045 | REQ-019 | test_cost_summary_uses_last_line_when_multiple | stdout with two 💸 lines (Total: 100 then Total: 250) | total=250, input=150, output=100, cache_read=30; explicitly NOT the sum (350) <!-- added 2026-05-24 (quickfix-2026-05-24T23-45-24) --> |
 | UT-046 | REQ-016 | test_journal_env_var_set | trial runner with mocked subprocess | env contains `ZRB_LLM_JOURNAL_DIR`; path ends with `/llm-notes` and shares the same parent as `ZRB_LLM_HISTORY_DIR` (sibling inside cell_dir) <!-- added 2026-05-24 (quickfix-2026-05-24T23-45-24) --> |
 | UT-047 | REQ-016 | test_llm_notes_isolated_per_trial | two consecutive trials with trial_index=1 and trial_index=2 | the two captured `ZRB_LLM_JOURNAL_DIR` values differ and contain `trial-1` and `trial-2` respectively <!-- added 2026-05-24 (quickfix-2026-05-24T23-45-24) --> |
+| UT-048 | REQ-016 | test_env_prefix_custom_sets_correct_env_vars | runner with `env_prefix="MYAPP"` | `MYAPP_LLM_HISTORY_DIR` and `MYAPP_LLM_JOURNAL_DIR` set; `ZRB_*` vars absent <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-049 | REQ-015 | test_model_format_rejects_empty_cli_name | `ExperimentConfig(cli_name="")` | Pydantic validation error raised <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-050 | REQ-033 | test_report_command_corrupt_experiment_json_exits_nonzero | corrupt `experiment.json` in `--dir` | `report` subcommand exits non-zero <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-051 | REQ-030 | test_corrupt_experiment_json_creates_fresh_experiment | corrupt `experiment.json` on resume | `_load_or_init_experiment` returns a fresh `Experiment` with no crash <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-052 | REQ-003 | test_concurrent_result_appends_produce_valid_json | concurrent appends to `results.json` | `results.json` is valid JSON with all entries and no corruption <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-053 | REQ-033 | test_report_command_valid_experiment_json_exits_zero | valid `experiment.json` in `--dir` | `report` subcommand exits 0 and writes `report.md` <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-054 | REQ-032 | test_list_command_valid_results_json_exits_zero | valid `results.json` in `--dir` | `list` subcommand exits 0 and prints model names <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-055 | REQ-032 | test_list_command_no_results_json_exits_nonzero | no `results.json` in `--dir` | `list` subcommand exits non-zero <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-056 | REQ-004 | test_cell_plan_3models_1case_2trials_equals_6_cells | 3 models × 1 case × 2 trials | 6 cells generated in the plan <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-057 | REQ-013 | test_relative_test_case_dirs_resolved_to_absolute | `--test-cases ./cases/` (relative) | paths resolved to absolute before `load_test_cases` is called <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-058 | REQ-034 | test_load_test_cases_aggregates_all_errors | two invalid test case dirs | single `ValueError` containing both error messages <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
+| UT-059 | REQ-031 | test_cell_dir_wiped_on_retry | cell_dir pre-created with stale-artifact.txt | stale file absent after run; cell_dir recreated <!-- added 2026-06-25 (quickfix-2026-06-24T23-43-58) --> |
 
 ## Integration Tests
 

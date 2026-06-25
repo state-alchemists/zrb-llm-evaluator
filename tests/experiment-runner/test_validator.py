@@ -1,4 +1,4 @@
-# COVERS: REQ-013, UT-015
+# COVERS: EXPERIMENT-RUNNER:REQ-013, EXPERIMENT-RUNNER:REQ-034, EXPERIMENT-RUNNER:UT-015
 
 """Tests for test case validation (missing/rejected validators)."""
 
@@ -11,12 +11,12 @@ from zrb_llm_evaluator.loader import load_test_case, load_test_cases
 
 
 class TestValidatorRejection:
-    """Tests for test case validator loading — @sdlc REQ-013."""
+    """Tests for test case validator loading — @sdlc EXPERIMENT-RUNNER:REQ-013."""
 
     def test_missing_validator_rejected(
         self, sample_test_case_dir_no_validator: Path
     ) -> None:
-        """UT-015: Missing validator.py raises ValueError."""
+        """EXPERIMENT-RUNNER:UT-015: Missing validator.py raises ValueError."""
         with pytest.raises(ValueError) as exc:
             load_test_case(sample_test_case_dir_no_validator)
         assert "validator.py" in str(exc.value)

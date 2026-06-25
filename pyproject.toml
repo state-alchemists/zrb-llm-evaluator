@@ -1,5 +1,5 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: REQ-006, REQ-014, RULE-006
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-006, EXPERIMENT-RUNNER:REQ-014, RULE-006
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

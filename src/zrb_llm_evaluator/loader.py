@@ -1,5 +1,5 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: REQ-013, REQ-015, REQ-024, RULE-001, RULE-004
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-013, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-024, EXPERIMENT-RUNNER:REQ-034, RULE-001, RULE-004
 
 """Test case discovery, loading, and validation."""
 
@@ -15,14 +15,14 @@ from pydantic import BaseModel, ConfigDict
 from zrb_llm_evaluator.protocols import ValidatorProtocol
 
 
-# @sdlc REQ-013, REQ-024, RULE-001, RULE-003
+# @sdlc EXPERIMENT-RUNNER:REQ-013, EXPERIMENT-RUNNER:REQ-024, RULE-001, RULE-003
 class TestCase(BaseModel):
     """A loaded test case with instruction, workdir, and validator.
 
     ``workdir`` is the path the runner stages into the trial's nested
     workdir. It always points to ``{test_case_dir}/workdir`` — whether or
     not that directory exists. When it doesn't exist, the runner stages
-    nothing and the LLM sees an empty workdir (per REQ-022 / REQ-024,
+    nothing and the LLM sees an empty workdir (per EXPERIMENT-RUNNER:REQ-022 / EXPERIMENT-RUNNER:REQ-024,
     test-case metadata like ``validator.py`` and ``instruction.txt`` must
     never reach the subprocess cwd).
     """
@@ -35,7 +35,7 @@ class TestCase(BaseModel):
     validator: ValidatorProtocol
 
 
-# @sdlc REQ-013, RULE-004
+# @sdlc EXPERIMENT-RUNNER:REQ-013, RULE-004
 def load_test_case(test_case_dir: Path) -> TestCase:
     """Load a single test case from a directory.
 
@@ -71,9 +71,9 @@ def load_test_case(test_case_dir: Path) -> TestCase:
 
     # workdir is the staging source — always {test_case_dir}/workdir.
     # If it doesn't exist, the runner creates an empty nested workdir
-    # instead of staging anything (REQ-022). Never falls back to
+    # instead of staging anything (EXPERIMENT-RUNNER:REQ-022). Never falls back to
     # test_case_dir itself, which would expose validator.py /
-    # instruction.txt to the LLM (REQ-024).
+    # instruction.txt to the LLM (EXPERIMENT-RUNNER:REQ-024).
     workdir: Path = test_case_dir / "workdir"
 
     # Load and validate validator module
@@ -92,7 +92,7 @@ def load_test_case(test_case_dir: Path) -> TestCase:
     )
 
 
-# @sdlc REQ-013, RULE-004
+# @sdlc EXPERIMENT-RUNNER:REQ-013, EXPERIMENT-RUNNER:REQ-034, RULE-004
 def load_test_cases(test_case_dirs: list[Path]) -> list[TestCase]:
     """Load all test cases from the given directories.
 
@@ -125,7 +125,7 @@ def load_test_cases(test_case_dirs: list[Path]) -> list[TestCase]:
     return test_cases
 
 
-# @sdlc REQ-015
+# @sdlc EXPERIMENT-RUNNER:REQ-015
 def make_safe_name(model: str) -> str:
     """Convert a model name to a filesystem-safe directory name.
 
@@ -143,7 +143,7 @@ def make_safe_name(model: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]", "_", model)
 
 
-# @sdlc REQ-001
+# @sdlc EXPERIMENT-RUNNER:REQ-001
 def make_session_name(model: str, test_case: str, trial_index: int) -> str:
     """Generate a unique session name for a trial.
 

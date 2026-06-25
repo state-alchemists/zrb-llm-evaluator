@@ -1,8 +1,8 @@
-# COVERS: REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-007, REQ-008, REQ-009,
-#   REQ-010, REQ-011, REQ-012, REQ-016, REQ-017, REQ-018, REQ-019, NFR-001,
-#   UT-003, UT-004, UT-005, UT-007, UT-008, UT-009, UT-010, UT-011,
-#   UT-013, UT-014, UT-019, UT-020, UT-021, UT-024, UT-043,
-#   UT-048, UT-051, UT-052, UT-056
+# COVERS: EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-007, EXPERIMENT-RUNNER:REQ-008, EXPERIMENT-RUNNER:REQ-009,
+# COVERS: EXPERIMENT-RUNNER:REQ-010, EXPERIMENT-RUNNER:REQ-011, EXPERIMENT-RUNNER:REQ-012, EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-018, EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:REQ-030, EXPERIMENT-RUNNER:REQ-031, EXPERIMENT-RUNNER:NFR-001,
+# COVERS: EXPERIMENT-RUNNER:UT-003, EXPERIMENT-RUNNER:UT-004, EXPERIMENT-RUNNER:UT-005, EXPERIMENT-RUNNER:UT-007, EXPERIMENT-RUNNER:UT-008, EXPERIMENT-RUNNER:UT-009, EXPERIMENT-RUNNER:UT-010, EXPERIMENT-RUNNER:UT-011,
+# COVERS: EXPERIMENT-RUNNER:UT-013, EXPERIMENT-RUNNER:UT-014, EXPERIMENT-RUNNER:UT-019, EXPERIMENT-RUNNER:UT-020, EXPERIMENT-RUNNER:UT-021, EXPERIMENT-RUNNER:UT-024, EXPERIMENT-RUNNER:UT-043,
+# COVERS: EXPERIMENT-RUNNER:UT-048, EXPERIMENT-RUNNER:UT-051, EXPERIMENT-RUNNER:UT-052, EXPERIMENT-RUNNER:UT-056, EXPERIMENT-RUNNER:UT-059
 
 """Tests for the runner module."""
 
@@ -40,10 +40,10 @@ def _mock_subprocess(mock_proc: AsyncMock):
 
 
 class TestCellPlan:
-    """Tests for cell plan generation — @sdlc REQ-004."""
+    """Tests for cell plan generation — @sdlc EXPERIMENT-RUNNER:REQ-004."""
 
     def test_iterates_all_combinations(self) -> None:
-        """UT-004: 2 models x 2 cases x 2 trials = 8 cells."""
+        """EXPERIMENT-RUNNER:UT-004: 2 models x 2 cases x 2 trials = 8 cells."""
         config = ExperimentConfig(
             models=["test:m1", "test:m2"],
             test_case_dirs=[Path("/tmp/case1"), Path("/tmp/case2")],
@@ -70,13 +70,13 @@ class TestCellPlan:
 
 
 class TestTrialRunner:
-    """Tests for TrialRunner — @sdlc REQ-001, REQ-005, REQ-016, REQ-018."""
+    """Tests for TrialRunner — @sdlc EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-018."""
 
     @pytest.mark.asyncio
     async def test_results_written_after_each_trial(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-003: After each trial, results.json has exactly N entries."""
+        """EXPERIMENT-RUNNER:UT-003: After each trial, results.json has exactly N entries."""
         output_dir = tmp_path / "out"
         results_path = output_dir / "results.json"
         mgr = ResumeManager(results_path)
@@ -102,7 +102,7 @@ class TestTrialRunner:
     async def test_timeout_kills_subprocess_and_records(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-005: Mock subprocess that sleeps 60s, timeout=1s => TIMEOUT."""
+        """EXPERIMENT-RUNNER:UT-005: Mock subprocess that sleeps 60s, timeout=1s => TIMEOUT."""
         # Use model_construct to bypass Pydantic validation (min timeout is 30)
         config = ExperimentConfig.model_construct(
             models=["openai:gpt-4o"],
@@ -133,15 +133,15 @@ class TestTrialRunner:
             result = await runner.run("openai:gpt-4o", 1)
 
         assert result.status == "TIMEOUT"
-        # @sdlc REQ-008: log_path references a file
+        # @sdlc EXPERIMENT-RUNNER:REQ-008: log_path references a file
         assert result.log_path != ""
 
-    # COVERS: REQ-005 (UT-043)
+    # COVERS: EXPERIMENT-RUNNER:REQ-005 (EXPERIMENT-RUNNER:UT-043)
     @pytest.mark.asyncio
     async def test_timeout_kills_whole_process_group(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-043: on timeout, the runner SIGKILLs the entire descendant group.
+        """EXPERIMENT-RUNNER:UT-043: on timeout, the runner SIGKILLs the entire descendant group.
 
         Asserts:
         - create_subprocess_exec is invoked with start_new_session=True so the
@@ -191,7 +191,7 @@ class TestTrialRunner:
     async def test_nonzero_exit_records_error(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-007: Non-zero exit code => ERROR status."""
+        """EXPERIMENT-RUNNER:UT-007: Non-zero exit code => ERROR status."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
@@ -217,7 +217,7 @@ class TestTrialRunner:
     async def test_verification_marker_overrides_exit(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-008: VERIFICATION_RESULT: PASS overrides exit code 1."""
+        """EXPERIMENT-RUNNER:UT-008: VERIFICATION_RESULT: PASS overrides exit code 1."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
@@ -252,7 +252,7 @@ class TestTrialRunner:
     async def test_cli_name_custom_binary(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-014: --cli-name=my-zrb => subprocess invoked with my-zrb."""
+        """EXPERIMENT-RUNNER:UT-014: --cli-name=my-zrb => subprocess invoked with my-zrb."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
@@ -283,7 +283,7 @@ class TestTrialRunner:
     async def test_env_var_set_before_invocation(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-019: ZRB_LLM_HISTORY_DIR and ZRB_LLM_JOURNAL_DIR set; --session passed."""
+        """EXPERIMENT-RUNNER:UT-019: ZRB_LLM_HISTORY_DIR and ZRB_LLM_JOURNAL_DIR set; --session passed."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
@@ -323,7 +323,7 @@ class TestTrialRunner:
     async def test_env_prefix_custom(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-048: env_prefix="MYAPP" => MYAPP_LLM_HISTORY_DIR, MYAPP_LLM_JOURNAL_DIR."""
+        """EXPERIMENT-RUNNER:UT-048: env_prefix="MYAPP" => MYAPP_LLM_HISTORY_DIR, MYAPP_LLM_JOURNAL_DIR."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
@@ -354,7 +354,7 @@ class TestTrialRunner:
     async def test_journal_env_var_set(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-046: ZRB_LLM_JOURNAL_DIR set and is a sibling of HISTORY_DIR."""
+        """EXPERIMENT-RUNNER:UT-046: ZRB_LLM_JOURNAL_DIR set and is a sibling of HISTORY_DIR."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
@@ -387,7 +387,7 @@ class TestTrialRunner:
     async def test_llm_notes_isolated_per_trial(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-047: Each trial gets its own ZRB_LLM_JOURNAL_DIR."""
+        """EXPERIMENT-RUNNER:UT-047: Each trial gets its own ZRB_LLM_JOURNAL_DIR."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
@@ -424,7 +424,7 @@ class TestTrialRunner:
     async def test_output_dir_structure(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-021: Output dir follows {out}/{model_safe}/{case}/trial-{N}/ pattern."""
+        """EXPERIMENT-RUNNER:UT-021: Output dir follows {out}/{model_safe}/{case}/trial-{N}/ pattern."""
         config = ExperimentConfig(
             models=["openai:gpt-4o", "anthropic:claude-3"],
             test_case_dirs=[tmp_path],
@@ -460,7 +460,7 @@ class TestTrialRunner:
     async def test_overhead_without_llm(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-024 / NFR-001: Per-trial overhead < 2s without LLM call."""
+        """EXPERIMENT-RUNNER:UT-024 / EXPERIMENT-RUNNER:NFR-001: Per-trial overhead < 2s without LLM call."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
@@ -490,7 +490,7 @@ class TestTrialRunner:
     async def test_results_json_concurrent_append(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-052: Concurrent appends => valid JSON with all entries, no corruption."""
+        """EXPERIMENT-RUNNER:UT-052: Concurrent appends => valid JSON with all entries, no corruption."""
         output_dir = tmp_path / "out-concurrent"
         output_dir.mkdir(parents=True)
         results_path = output_dir / "results.json"
@@ -520,12 +520,12 @@ class TestTrialRunner:
 
 
 class TestExperimentLifecycle:
-    """Tests for experiment lifecycle — @sdlc REQ-003, REQ-017."""
+    """Tests for experiment lifecycle — @sdlc EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-017."""
 
     def test_load_or_init_experiment_corrupt_json(
         self, tmp_path: Path,
     ) -> None:
-        """UT-051: Corrupt experiment.json => fresh experiment created (no crash)."""
+        """EXPERIMENT-RUNNER:UT-051: Corrupt experiment.json => fresh experiment created (no crash)."""
         output_dir = tmp_path / "out"
         output_dir.mkdir(parents=True)
         experiment_path = output_dir / "experiment.json"
@@ -544,10 +544,10 @@ class TestExperimentLifecycle:
 
 
 class TestCostParser:
-    """Tests for cost summary parsing — @sdlc REQ-019."""
+    """Tests for cost summary parsing — @sdlc EXPERIMENT-RUNNER:REQ-019."""
 
     def test_cost_summary_parsed(self) -> None:
-        """UT-022: Parse cost line with all fields."""
+        """EXPERIMENT-RUNNER:UT-022: Parse cost line with all fields."""
         stdout = (
             "Some text\n"
             "💸 (Requests: 1 | Tool Calls: 0 | Total: 150) "
@@ -562,7 +562,7 @@ class TestCostParser:
         assert result["cache_read_tokens"] == 0
 
     def test_cost_summary_parsed_real_zrb_format(self) -> None:
-        """UT-044: Parse the real zrb 💸 cost line; ignore Audio Input/Output."""
+        """EXPERIMENT-RUNNER:UT-044: Parse the real zrb 💸 cost line; ignore Audio Input/Output."""
         stdout = (
             "Some preamble line\n"
             "💸 (Requests: 4 | Tool Calls: 7 | Total: 1500) "
@@ -591,7 +591,7 @@ class TestCostParser:
         assert result2["output_tokens"] != 888
 
     def test_cost_summary_uses_last_line_when_multiple(self) -> None:
-        """UT-045: When multiple 💸 lines appear, only the LAST is used."""
+        """EXPERIMENT-RUNNER:UT-045: When multiple 💸 lines appear, only the LAST is used."""
         stdout = (
             "💸 (Requests: 1 | Tool Calls: 0 | Total: 100) "
             "Input: 60 | Audio Input: 0 | Output: 40 | Audio Output: 0 | "
@@ -610,7 +610,7 @@ class TestCostParser:
         assert result["total_tokens"] != 350
 
     def test_cost_summary_missing_defaults_zero(self) -> None:
-        """UT-023: No cost line => all zero."""
+        """EXPERIMENT-RUNNER:UT-023: No cost line => all zero."""
         stdout = "Just some output without any cost info.\n"
         result = parse_cost_summary(stdout)
         assert result["total_tokens"] == 0
@@ -633,7 +633,7 @@ class TestCostParser:
 
 
 class TestVerificationMarker:
-    """Tests for VERIFICATION_RESULT marker parsing — @sdlc REQ-007."""
+    """Tests for VERIFICATION_RESULT marker parsing — @sdlc EXPERIMENT-RUNNER:REQ-007."""
 
     def test_extract_verification_marker_found(self) -> None:
         """Marker found in stdout."""
@@ -657,13 +657,13 @@ class TestVerificationMarker:
 
 
 class TestRunnerValidatorIntegration:
-    """Tests for validator interaction in TrialRunner — @sdlc REQ-009, REQ-011."""
+    """Tests for validator interaction in TrialRunner — @sdlc EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-011."""
 
     @pytest.mark.asyncio
     async def test_validator_invoked_on_completion(
         self, tmp_path: Path
     ) -> None:
-        """UT-010: Validator called with output_dir and log_content."""
+        """EXPERIMENT-RUNNER:UT-010: Validator called with output_dir and log_content."""
         # Create a proper test case with a tracking validator
         case_dir = tmp_path / "v-case"
         case_dir.mkdir(parents=True, exist_ok=True)
@@ -709,7 +709,7 @@ class TestRunnerValidatorIntegration:
     async def test_validator_receives_log_content(
         self, tmp_path: Path
     ) -> None:
-        """UT-011: Validator receives the expected output text in log_content."""
+        """EXPERIMENT-RUNNER:UT-011: Validator receives the expected output text in log_content."""
         case_dir = tmp_path / "log-case"
         case_dir.mkdir(parents=True, exist_ok=True)
         expected_output = "Hello"
@@ -758,7 +758,7 @@ class TestRunnerValidatorIntegration:
     async def test_validator_exception_records_error(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-013: Validator raises exception => ERROR status."""
+        """EXPERIMENT-RUNNER:UT-013: Validator raises exception => ERROR status."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
@@ -801,7 +801,7 @@ class TestRunnerValidatorIntegration:
     async def test_timeout_result_references_log_file(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-009: TIMEOUT result has a non-empty log_path."""
+        """EXPERIMENT-RUNNER:UT-009: TIMEOUT result has a non-empty log_path."""
         # Use model_construct to bypass Pydantic validation (min timeout is 30)
         config = ExperimentConfig.model_construct(
             models=["openai:gpt-4o"],
@@ -840,7 +840,7 @@ class TestRunnerValidatorIntegration:
     async def test_results_json_atomic_write(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """UT-020: results.json is valid JSON with exactly 1 TrialResult entry."""
+        """EXPERIMENT-RUNNER:UT-020: results.json is valid JSON with exactly 1 TrialResult entry."""
         output_dir = tmp_path / "out-atomic"
         output_dir.mkdir(parents=True, exist_ok=True)
         results_path = output_dir / "results.json"
@@ -865,13 +865,13 @@ class TestRunnerValidatorIntegration:
 
 
 class TestWorkStewardParallel:
-    """Tests for WorkSteward parallel execution — @sdlc REQ-002, REQ-010."""
+    """Tests for WorkSteward parallel execution — @sdlc EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-010."""
 
     @pytest.mark.asyncio
     async def test_parallel_execution_work_steward(
         self, tmp_path: Path,
     ) -> None:
-        """UT-056: 3 models x 1 case x 2 trials = 6 cells, parallelism=3.
+        """EXPERIMENT-RUNNER:UT-056: 3 models x 1 case x 2 trials = 6 cells, parallelism=3.
 
         Verifies WorkSteward bounded concurrency: all 6 results have terminal
         statuses and results.json has 6 entries.
@@ -918,3 +918,40 @@ class TestWorkStewardParallel:
         assert results_path.exists()
         data = json.loads(results_path.read_text(encoding="utf-8"))
         assert len(data) == 6
+
+
+class TestCellDirWipe:
+    """Tests for cell-directory wipe on retry — @sdlc EXPERIMENT-RUNNER:REQ-031."""
+
+    @pytest.mark.asyncio
+    async def test_cell_dir_wiped_on_retry(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """EXPERIMENT-RUNNER:UT-059: Existing cell_dir is wiped before re-running so retry starts pristine."""
+        config = ExperimentConfig(
+            models=["openai:gpt-4o"],
+            test_case_dirs=[tmp_path],
+            trials=1,
+            parallelism=1,
+            timeout=30,
+        )
+        output_dir = tmp_path / "out"
+
+        # Pre-create the cell dir with a sentinel file to simulate a prior interrupted run.
+        cell_dir = (
+            output_dir / "openai_gpt-4o" / sample_test_case.name / "trial-1"
+        )
+        cell_dir.mkdir(parents=True, exist_ok=True)
+        sentinel = cell_dir / "stale-artifact.txt"
+        sentinel.write_text("should be wiped", encoding="utf-8")
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(b"Output", b""))
+        mock_proc.returncode = 0
+
+        with patch.object(asyncio, "create_subprocess_exec", _mock_subprocess(mock_proc)):
+            runner = TrialRunner(config, sample_test_case, output_dir)
+            await runner.run("openai:gpt-4o", 1)
+
+        assert not sentinel.exists(), "stale-artifact.txt must have been wiped by rmtree"
+        assert cell_dir.is_dir(), "cell_dir must be recreated after wipe"

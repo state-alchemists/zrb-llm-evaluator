@@ -1,11 +1,12 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: REQ-004, REQ-014, REQ-015, REQ-016, RULE-011, RULE-012
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-014, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-032, EXPERIMENT-RUNNER:REQ-033, RULE-011, RULE-012
 
 """Typer CLI entry point for the experiment runner."""
 
 from __future__ import annotations
 
 import logging
+import subprocess
 import sys
 from pathlib import Path
 
@@ -22,6 +23,20 @@ app = typer.Typer(
 )
 
 
+def _get_cli_version(cli_name: str) -> str:
+    """Return the version string for ``cli_name``, or '' on failure."""
+    try:
+        result = subprocess.run(
+            [cli_name, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return (result.stdout.strip() or result.stderr.strip())
+    except Exception:
+        return ""
+
+
 def _setup_logging() -> None:
     """Configure stderr progress logging for the runner package."""
     pkg_logger = logging.getLogger("zrb_llm_evaluator")
@@ -35,7 +50,7 @@ def _setup_logging() -> None:
     pkg_logger.setLevel(logging.INFO)
 
 
-# @sdlc REQ-004, REQ-014, REQ-015, REQ-016
+# @sdlc EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-014, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-016
 @app.command()
 def run(
     models: str = typer.Option(
@@ -68,6 +83,7 @@ def run(
     case_paths = [Path(p.strip()) for p in test_cases.split(",") if p.strip()]
 
     # Validate & build config
+    cli_ver = _get_cli_version(cli_name)
     try:
         config = ExperimentConfig(
             models=model_list,
@@ -76,6 +92,7 @@ def run(
             parallelism=parallelism,
             timeout=timeout,
             cli_name=cli_name,
+            cli_version=cli_ver,
             env_prefix=env_prefix,
         )
     except Exception as exc:
@@ -115,7 +132,7 @@ def run(
     typer.echo(f"Report:     {report_path}")
 
 
-# @sdlc REQ-017
+# @sdlc EXPERIMENT-RUNNER:REQ-032
 @app.command()
 def list(
     dir: str = typer.Option("./out", "--dir", help="Output directory to list"),
@@ -143,7 +160,7 @@ def list(
         )
 
 
-# @sdlc REQ-017
+# @sdlc EXPERIMENT-RUNNER:REQ-033
 @app.command()
 def report(
     dir: str = typer.Option("./out", "--dir", help="Output directory with results"),

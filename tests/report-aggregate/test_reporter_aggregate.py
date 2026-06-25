@@ -1,10 +1,10 @@
-# COVERS: REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036,
-#         REQ-037, REQ-038, REQ-039, REQ-040, REQ-041, REQ-042, REQ-043,
-#         NFR-002, NFR-003, NFR-004,
-#         UT-A001, UT-A002, UT-A003, UT-A004, UT-A005, UT-A006, UT-A007,
-#         UT-A008, UT-A009, UT-A010, UT-A011, UT-A012, UT-A013, UT-A014,
-#         UT-A015, UT-A016, UT-A017, UT-A018, UT-A019, UT-A020, UT-A021,
-#         UT-A022, UT-A023, UT-A024, UT-A025, UT-A026, UT-A027
+# COVERS: REPORT-AGGREGATE:REQ-030, REPORT-AGGREGATE:REQ-031, REPORT-AGGREGATE:REQ-032, REPORT-AGGREGATE:REQ-033, REPORT-AGGREGATE:REQ-034, REPORT-AGGREGATE:REQ-035, REPORT-AGGREGATE:REQ-036,
+# COVERS: REPORT-AGGREGATE:REQ-037, REPORT-AGGREGATE:REQ-038, REPORT-AGGREGATE:REQ-039, REPORT-AGGREGATE:REQ-040, REPORT-AGGREGATE:REQ-041, REPORT-AGGREGATE:REQ-042, REPORT-AGGREGATE:REQ-043,
+# COVERS: REPORT-AGGREGATE:NFR-002, REPORT-AGGREGATE:NFR-003, REPORT-AGGREGATE:NFR-004,
+# COVERS: UT-A001, UT-A002, UT-A003, UT-A004, UT-A005, UT-A006, UT-A007,
+# COVERS: UT-A008, UT-A009, UT-A010, UT-A011, UT-A012, UT-A013, UT-A014,
+# COVERS: UT-A015, UT-A016, UT-A017, UT-A018, UT-A019, UT-A020, UT-A021,
+# COVERS: UT-A022, UT-A023, UT-A024, UT-A025, UT-A026, UT-A027
 
 """Unit tests for the aggregate sections of the Markdown report."""
 
@@ -190,7 +190,7 @@ def _all_five_status_fixture() -> list[TrialResult]:
 
 
 # ---------------------------------------------------------------------------
-# UT-A001 / REQ-030
+# UT-A001 / REPORT-AGGREGATE:REQ-030
 # ---------------------------------------------------------------------------
 
 
@@ -210,7 +210,7 @@ def test_aggregates_sections_present_in_fixed_order(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A002 / REQ-031
+# UT-A002 / REPORT-AGGREGATE:REQ-031
 # ---------------------------------------------------------------------------
 
 
@@ -231,7 +231,7 @@ def test_summary_and_details_sections_unchanged(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A003 / REQ-032
+# UT-A003 / REPORT-AGGREGATE:REQ-032
 # ---------------------------------------------------------------------------
 
 
@@ -258,7 +258,7 @@ def test_aggregate_status_cells_use_canonical_icons(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A004 / REQ-033
+# UT-A004 / REPORT-AGGREGATE:REQ-033
 # ---------------------------------------------------------------------------
 
 
@@ -279,7 +279,7 @@ def test_results_json_unaffected_by_aggregates(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A005 / REQ-034
+# UT-A005 / REPORT-AGGREGATE:REQ-034
 # ---------------------------------------------------------------------------
 
 
@@ -296,7 +296,7 @@ def test_aggregates_region_is_byte_identical_on_rerender(tmp_path: Path) -> None
 
 
 # ---------------------------------------------------------------------------
-# UT-A006 / REQ-035
+# UT-A006 / REPORT-AGGREGATE:REQ-035
 # ---------------------------------------------------------------------------
 
 
@@ -327,7 +327,7 @@ def test_overall_status_rows_in_canonical_order(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A007 / REQ-035
+# UT-A007 / REPORT-AGGREGATE:REQ-035
 # ---------------------------------------------------------------------------
 
 
@@ -352,7 +352,7 @@ def test_overall_status_omits_zero_count_statuses(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A008 / REQ-035
+# UT-A008 / REPORT-AGGREGATE:REQ-035
 # ---------------------------------------------------------------------------
 
 
@@ -390,7 +390,7 @@ def test_overall_status_percentage_one_decimal(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A009 / REQ-035
+# UT-A009 / REPORT-AGGREGATE:REQ-035
 # ---------------------------------------------------------------------------
 
 
@@ -420,7 +420,7 @@ def test_total_trials_bold_line_precedes_overall_status(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A010 / REQ-036
+# UT-A010 / REPORT-AGGREGATE:REQ-036
 # ---------------------------------------------------------------------------
 
 
@@ -459,7 +459,7 @@ def test_by_model_avg_duration_includes_failed_trials(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A011 / REQ-036
+# UT-A011 / REPORT-AGGREGATE:REQ-036
 # ---------------------------------------------------------------------------
 
 
@@ -491,7 +491,7 @@ def test_by_model_avg_duration_one_decimal(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A012 / REQ-036
+# UT-A012 / REPORT-AGGREGATE:REQ-036
 # ---------------------------------------------------------------------------
 
 
@@ -517,7 +517,7 @@ def test_by_model_rows_sorted_ascending(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A013 / REQ-037
+# UT-A013 / REPORT-AGGREGATE:REQ-037
 # ---------------------------------------------------------------------------
 
 
@@ -537,7 +537,7 @@ def test_by_test_case_omits_avg_duration_column(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A014 / REQ-037
+# UT-A014 / REPORT-AGGREGATE:REQ-037
 # ---------------------------------------------------------------------------
 
 
@@ -560,7 +560,7 @@ def test_by_test_case_rows_sorted_ascending(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A015 / REQ-038
+# UT-A015 / REPORT-AGGREGATE:REQ-038
 # ---------------------------------------------------------------------------
 
 
@@ -600,7 +600,7 @@ def test_grid_dimensions_and_axis_sort(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A016 / REQ-038
+# UT-A016 / REPORT-AGGREGATE:REQ-038
 # ---------------------------------------------------------------------------
 
 
@@ -630,7 +630,7 @@ def test_grid_cell_icons_in_trial_index_order(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A017 / REQ-039
+# UT-A017 / REPORT-AGGREGATE:REQ-039
 # ---------------------------------------------------------------------------
 
 
@@ -663,7 +663,7 @@ def test_grid_cell_empty_renders_em_dash(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A018 / REQ-040
+# UT-A018 / REPORT-AGGREGATE:REQ-040
 # ---------------------------------------------------------------------------
 
 
@@ -697,7 +697,7 @@ def test_failing_table_includes_fail_timeout_error(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A019 / REQ-040
+# UT-A019 / REPORT-AGGREGATE:REQ-040
 # ---------------------------------------------------------------------------
 
 
@@ -738,7 +738,7 @@ def test_failing_table_sorted_by_model_case_trial(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A020 / REQ-041
+# UT-A020 / REPORT-AGGREGATE:REQ-041
 # ---------------------------------------------------------------------------
 
 
@@ -766,7 +766,7 @@ def test_failing_section_empty_state_literal(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A021 / REQ-042
+# UT-A021 / REPORT-AGGREGATE:REQ-042
 # ---------------------------------------------------------------------------
 
 
@@ -782,7 +782,7 @@ def test_aggregates_contain_no_html(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A022 / REQ-030
+# UT-A022 / REPORT-AGGREGATE:REQ-030
 # ---------------------------------------------------------------------------
 
 
@@ -812,7 +812,7 @@ def test_aggregates_render_with_zero_trials(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A023 / NFR-002
+# UT-A023 / REPORT-AGGREGATE:NFR-002
 # ---------------------------------------------------------------------------
 
 
@@ -847,7 +847,7 @@ def test_aggregates_render_linear_in_trial_count(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A024 / NFR-003
+# UT-A024 / REPORT-AGGREGATE:NFR-003
 # ---------------------------------------------------------------------------
 
 
@@ -862,7 +862,7 @@ def test_results_json_byte_identical_to_pregolden(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A025 / NFR-004
+# UT-A025 / REPORT-AGGREGATE:NFR-004
 # ---------------------------------------------------------------------------
 
 
@@ -894,15 +894,15 @@ def test_aggregates_byte_identical_across_two_calls(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A026 / REQ-043 — whole-file byte equality across re-renders
+# UT-A026 / REPORT-AGGREGATE:REQ-043 — whole-file byte equality across re-renders
 # ---------------------------------------------------------------------------
 
 
-# @sdlc REQ-043
+# @sdlc REPORT-AGGREGATE:REQ-043
 def test_whole_report_byte_identical_on_rerender(tmp_path: Path) -> None:
     """Two renders of the same Experiment produce a byte-identical whole file.
 
-    Strengthens UT-A005, which only checks the aggregate region. REQ-043
+    Strengthens UT-A005, which only checks the aggregate region. REPORT-AGGREGATE:REQ-043
     requires the entire file (header, aggregates, Summary, Per-Trial Details)
     to be byte-equal across re-renders.
     """
@@ -915,11 +915,11 @@ def test_whole_report_byte_identical_on_rerender(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-A027 / REQ-043 — Generated timestamp derived from experiment timestamps
+# UT-A027 / REPORT-AGGREGATE:REQ-043 — Generated timestamp derived from experiment timestamps
 # ---------------------------------------------------------------------------
 
 
-# @sdlc REQ-043
+# @sdlc REPORT-AGGREGATE:REQ-043
 def test_generated_timestamp_derived_from_experiment_timestamps(
     tmp_path: Path,
 ) -> None:

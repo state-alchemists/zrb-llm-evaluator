@@ -1,5 +1,5 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: REQ-003, REQ-015, REQ-017, REQ-019, NFR-002, RULE-001, RULE-003
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:NFR-002, RULE-001, RULE-003
 
 """Pydantic v2 models for the experiment runner."""
 
@@ -13,7 +13,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 
-# @sdlc REQ-003, REQ-017, RULE-003
+# @sdlc EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-017, RULE-003
 class ValidationCheck(BaseModel):
     """A single check within a validation result."""
 
@@ -22,7 +22,7 @@ class ValidationCheck(BaseModel):
     message: str = ""
 
 
-# @sdlc REQ-003, REQ-009, RULE-003
+# @sdlc EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-009, RULE-003
 class ValidationResult(BaseModel):
     """Structured result from a test case validator."""
 
@@ -59,7 +59,7 @@ class TrialTrace(BaseModel):
     turn_count: int = 0
 
 
-# @sdlc REQ-001, REQ-005, REQ-007, REQ-008, REQ-009, REQ-017, REQ-019, RULE-003
+# @sdlc EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-007, EXPERIMENT-RUNNER:REQ-008, EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-019, RULE-003
 class TrialResult(BaseModel):
     """Outcome of a single trial."""
 
@@ -81,7 +81,7 @@ class TrialResult(BaseModel):
     tool_call_count: int = 0
 
 
-# @sdlc REQ-004, REQ-010, REQ-012, REQ-014, REQ-015, RULE-003
+# @sdlc EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-010, EXPERIMENT-RUNNER:REQ-012, EXPERIMENT-RUNNER:REQ-014, EXPERIMENT-RUNNER:REQ-015, RULE-003
 class ExperimentConfig(BaseModel):
     """Configuration for an experiment run."""
 
@@ -91,9 +91,10 @@ class ExperimentConfig(BaseModel):
     parallelism: int = Field(ge=1, default=4)
     timeout: int = Field(ge=30, default=300)
     cli_name: str = Field(default="zrb", min_length=1)
+    cli_version: str = Field(default="")
     env_prefix: str = Field(default="ZRB", min_length=1)
 
-    # @sdlc REQ-015
+    # @sdlc EXPERIMENT-RUNNER:REQ-015
     @field_validator("models")
     @classmethod
     def _validate_model_format(cls, v: list[str]) -> list[str]:

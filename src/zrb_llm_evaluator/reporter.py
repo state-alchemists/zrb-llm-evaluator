@@ -1,9 +1,7 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md,
 #                      .sdlc/specs/report-aggregate/spec.md
-# IMPLEMENTS: REQ-003, REQ-017, REQ-025, REQ-026, REQ-027, REQ-028, REQ-029,
-#             REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-035, REQ-036,
-#             REQ-037, REQ-038, REQ-039, REQ-040, REQ-041, REQ-042,
-#             NFR-002, NFR-003, NFR-004
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-025, EXPERIMENT-RUNNER:REQ-026, EXPERIMENT-RUNNER:REQ-027, EXPERIMENT-RUNNER:REQ-028, EXPERIMENT-RUNNER:REQ-029
+# IMPLEMENTS: REPORT-AGGREGATE:REQ-030, REPORT-AGGREGATE:REQ-031, REPORT-AGGREGATE:REQ-032, REPORT-AGGREGATE:REQ-033, REPORT-AGGREGATE:REQ-034, REPORT-AGGREGATE:REQ-035, REPORT-AGGREGATE:REQ-036, REPORT-AGGREGATE:REQ-037, REPORT-AGGREGATE:REQ-038, REPORT-AGGREGATE:REQ-039, REPORT-AGGREGATE:REQ-040, REPORT-AGGREGATE:REQ-041, REPORT-AGGREGATE:REQ-042, REPORT-AGGREGATE:REQ-043, REPORT-AGGREGATE:NFR-002, REPORT-AGGREGATE:NFR-003, REPORT-AGGREGATE:NFR-004
 
 """Report generation — Markdown and JSON output."""
 
@@ -181,10 +179,13 @@ class _AggregateBuckets:
     by_cell: dict[tuple[str, str], list[TrialResult]] = field(default_factory=dict)
     failing: list[TrialResult] = field(default_factory=list)
     model_duration_sum: dict[str, float] = field(default_factory=dict)
+    model_input_tokens: dict[str, int] = field(default_factory=dict)
+    model_output_tokens: dict[str, int] = field(default_factory=dict)
+    model_scores: dict[str, list[float]] = field(default_factory=dict)
     total: int = 0
 
 
-# @sdlc NFR-002
+# @sdlc REPORT-AGGREGATE:NFR-002
 def _collect_aggregates(results: list[TrialResult]) -> _AggregateBuckets:
     """Build all aggregate buckets in a single O(T) pass over ``results``."""
     b = _AggregateBuckets()
@@ -200,6 +201,14 @@ def _collect_aggregates(results: list[TrialResult]) -> _AggregateBuckets:
         b.model_duration_sum[r.model] = (
             b.model_duration_sum.get(r.model, 0.0) + r.duration
         )
+        b.model_input_tokens[r.model] = (
+            b.model_input_tokens.get(r.model, 0) + r.input_tokens
+        )
+        b.model_output_tokens[r.model] = (
+            b.model_output_tokens.get(r.model, 0) + r.output_tokens
+        )
+        if r.verification_result is not None:
+            b.model_scores.setdefault(r.model, []).append(r.verification_result.score)
 
         case_bucket = b.by_case.get(r.test_case)
         if case_bucket is None:
@@ -214,7 +223,7 @@ def _collect_aggregates(results: list[TrialResult]) -> _AggregateBuckets:
     return b
 
 
-# @sdlc REQ-035
+# @sdlc REPORT-AGGREGATE:REQ-035
 def _render_overall_status(b: _AggregateBuckets) -> list[str]:
     """Render the Overall Status section."""
     lines: list[str] = [
@@ -232,25 +241,63 @@ def _render_overall_status(b: _AggregateBuckets) -> list[str]:
     return lines
 
 
-# @sdlc REQ-036
-def _render_by_model(b: _AggregateBuckets) -> list[str]:
-    """Render the By Model section."""
+def _render_leaderboard(b: _AggregateBuckets) -> list[str]:
+    """Render a ranked leaderboard sorted by pass rate, EXCELLENT count, avg score."""
+
+    def _rank_key(item: tuple[str, _StatusCounts]) -> tuple:
+        model, c = item
+        n = c.trials
+        ok = c.excellent + c.passed
+        pass_rate = ok / n if n else 0.0
+        avg = _avg_score(b.model_scores.get(model, []))
+        return (-pass_rate, -c.excellent, -avg)
+
     lines: list[str] = [
-        "\n## By Model\n\n",
-        "| Model | Trials | 👍 | ✅ | ❌ | ⏱️ | ⚠️ | Avg dur (s) |\n",
-        "|-------|--------|----|----|----|----|----|-------------|\n",
+        "\n## Leaderboard\n\n",
+        "Sorted by pass rate, then EXCELLENT count, then avg score.\n\n",
+        "| # | Model | Avg Score | Pass % | n | 👍 | ✅ | ❌ | ⏱️ | ⚠️ |\n",
+        "|---|-------|-----------|--------|---|----|----|----|----|----|\n",
     ]
-    for model in sorted(b.by_model):
-        c = b.by_model[model]
-        avg = (b.model_duration_sum[model] / c.trials) if c.trials > 0 else 0.0
+    for i, (model, c) in enumerate(
+        sorted(b.by_model.items(), key=_rank_key), start=1
+    ):
+        n = c.trials
+        ok = c.excellent + c.passed
+        rate = (100 * ok // n) if n else 0
+        scores = b.model_scores.get(model, [])
+        avg = _avg_score(scores)
         lines.append(
-            f"| {model} | {c.trials} | {c.excellent} | {c.passed} | "
-            f"{c.failed} | {c.timeout} | {c.error} | {avg:.1f} |\n"
+            f"| {i} | {model} | {avg:.3f} | {rate}% | {len(scores)} | "
+            f"{c.excellent} | {c.passed} | {c.failed} | {c.timeout} | {c.error} |\n"
         )
     return lines
 
 
-# @sdlc REQ-037
+def _avg_score(scores: list[float]) -> float:
+    return sum(scores) / len(scores) if scores else 0.0
+
+
+# @sdlc REPORT-AGGREGATE:REQ-036
+def _render_by_model(b: _AggregateBuckets) -> list[str]:
+    """Render the By Model section."""
+    lines: list[str] = [
+        "\n## By Model\n\n",
+        "| Model | Trials | 👍 | ✅ | ❌ | ⏱️ | ⚠️ | Input Tokens | Output Tokens | Avg dur (s) |\n",
+        "|-------|--------|----|----|----|----|----|--------------|---------------|-------------|\n",
+    ]
+    for model in sorted(b.by_model):
+        c = b.by_model[model]
+        avg = (b.model_duration_sum[model] / c.trials) if c.trials > 0 else 0.0
+        in_tok = b.model_input_tokens.get(model, 0)
+        out_tok = b.model_output_tokens.get(model, 0)
+        lines.append(
+            f"| {model} | {c.trials} | {c.excellent} | {c.passed} | "
+            f"{c.failed} | {c.timeout} | {c.error} | {in_tok} | {out_tok} | {avg:.1f} |\n"
+        )
+    return lines
+
+
+# @sdlc REPORT-AGGREGATE:REQ-037
 def _render_by_test_case(b: _AggregateBuckets) -> list[str]:
     """Render the By Test Case section."""
     lines: list[str] = [
@@ -267,7 +314,7 @@ def _render_by_test_case(b: _AggregateBuckets) -> list[str]:
     return lines
 
 
-# @sdlc REQ-038, REQ-039
+# @sdlc REPORT-AGGREGATE:REQ-038, REPORT-AGGREGATE:REQ-039
 def _render_grid(b: _AggregateBuckets) -> list[str]:
     """Render the Grid section: models as rows, test cases as columns."""
     models = sorted(b.by_model)
@@ -341,7 +388,7 @@ def _render_stability(b: _AggregateBuckets) -> list[str]:
     return lines
 
 
-# @sdlc REQ-040, REQ-041
+# @sdlc REPORT-AGGREGATE:REQ-040, REPORT-AGGREGATE:REQ-041
 def _render_failing(b: _AggregateBuckets) -> list[str]:
     """Render the Failing / Timeout Trials section."""
     lines: list[str] = ["\n## Failing / Timeout Trials\n\n"]
@@ -358,7 +405,7 @@ def _render_failing(b: _AggregateBuckets) -> list[str]:
     return lines
 
 
-# @sdlc REQ-003, REQ-017, NFR-003
+# @sdlc EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-017, REPORT-AGGREGATE:NFR-003
 def generate_json_report(experiment: Experiment, output_path: Path) -> Report:
     """Generate a structured JSON report of an experiment.
 
@@ -399,8 +446,7 @@ def generate_json_report(experiment: Experiment, output_path: Path) -> Report:
     )
 
 
-# @sdlc REQ-003, REQ-025, REQ-026, REQ-027, REQ-028, REQ-029,
-#       REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-042, NFR-004
+# @sdlc EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-025, EXPERIMENT-RUNNER:REQ-026, EXPERIMENT-RUNNER:REQ-027, EXPERIMENT-RUNNER:REQ-028, EXPERIMENT-RUNNER:REQ-029, REPORT-AGGREGATE:REQ-030, REPORT-AGGREGATE:REQ-031, REPORT-AGGREGATE:REQ-032, REPORT-AGGREGATE:REQ-033, REPORT-AGGREGATE:REQ-034, REPORT-AGGREGATE:REQ-042, REPORT-AGGREGATE:NFR-004
 def generate_markdown_report(experiment: Experiment, output_path: Path) -> Report:
     """Generate a human-readable Markdown report.
 
@@ -436,12 +482,17 @@ def generate_markdown_report(experiment: Experiment, output_path: Path) -> Repor
         f"- **Started**: {started_str}\n",
         f"- **Completed**: {completed_str}\n",
         f"- **Generated**: {generated_at.isoformat()}\n",
-        "\n",
     ]
+    cli_version = experiment.config.cli_version
+    if cli_version:
+        cli_label = experiment.config.cli_name.title()
+        lines.append(f"- **{cli_label} Version**: {cli_version}\n")
+    lines.append("\n")
 
     # Aggregate sections (REQ-030) — computed at render time only (REQ-033).
     aggregates = _collect_aggregates(sorted_results)
     lines.extend(_render_overall_status(aggregates))
+    lines.extend(_render_leaderboard(aggregates))
     lines.extend(_render_by_model(aggregates))
     lines.extend(_render_by_test_case(aggregates))
     lines.extend(_render_grid(aggregates))

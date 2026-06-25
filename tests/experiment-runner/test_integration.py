@@ -1,5 +1,5 @@
-# COVERS: REQ-002, REQ-003, REQ-004, REQ-006, REQ-007, REQ-009, REQ-010, REQ-017,
-#   REQ-018, NFR-001, NFR-002, IT-001, IT-002, IT-003, IT-004
+# COVERS: EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-006, EXPERIMENT-RUNNER:REQ-007, EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-010, EXPERIMENT-RUNNER:REQ-017,
+#   EXPERIMENT-RUNNER:REQ-018, EXPERIMENT-RUNNER:NFR-001, EXPERIMENT-RUNNER:NFR-002, EXPERIMENT-RUNNER:IT-001, EXPERIMENT-RUNNER:IT-002, EXPERIMENT-RUNNER:IT-003, EXPERIMENT-RUNNER:IT-004
 
 """Integration tests for the experiment runner."""
 
@@ -13,11 +13,11 @@ from zrb_llm_evaluator.models import ExperimentConfig
 
 
 class TestRunCommandFullPipeline:
-    """IT-001: Full pipeline with mock test cases."""
+    """EXPERIMENT-RUNNER:IT-001: Full pipeline with mock test cases."""
 
     @pytest.mark.asyncio
     async def test_run_command_full_pipeline(self, tmp_path: Path) -> None:
-        """IT-001: Run a full experiment end-to-end with mock subprocess."""
+        """EXPERIMENT-RUNNER:IT-001: Run a full experiment end-to-end with mock subprocess."""
         # Create 2 test case directories
         cases_dir = tmp_path / "cases"
         cases_dir.mkdir()
@@ -79,11 +79,11 @@ class TestRunCommandFullPipeline:
 
 
 class TestResumeMidExperiment:
-    """IT-002: Resume functionality after partial execution."""
+    """EXPERIMENT-RUNNER:IT-002: Resume functionality after partial execution."""
 
     @pytest.mark.asyncio
     async def test_resume_mid_experiment(self, tmp_path: Path) -> None:
-        """IT-002: Run 2 models x 1 case x 2 trials; simulate interrupted after cell 3."""
+        """EXPERIMENT-RUNNER:IT-002: Run 2 models x 1 case x 2 trials; simulate interrupted after cell 3."""
         cases_dir = tmp_path / "cases"
         cases_dir.mkdir()
         case_dir = cases_dir / "my-case"
@@ -132,11 +132,11 @@ class TestResumeMidExperiment:
 
 
 class TestParallelExecution:
-    """IT-003: Parallel execution correctness."""
+    """EXPERIMENT-RUNNER:IT-003: Parallel execution correctness."""
 
     @pytest.mark.asyncio
     async def test_parallel_execution(self, tmp_path: Path) -> None:
-        """IT-003: Run 8 cells with parallelism=4; should finish faster than sequential."""
+        """EXPERIMENT-RUNNER:IT-003: Run 8 cells with parallelism=4; should finish faster than sequential."""
         cases_dir = tmp_path / "cases"
         cases_dir.mkdir()
         case_dir = cases_dir / "p-case"
@@ -178,11 +178,11 @@ class TestParallelExecution:
 
 
 class TestCustomValidatorExecuted:
-    """IT-004: Custom validator is executed and result stored."""
+    """EXPERIMENT-RUNNER:IT-004: Custom validator is executed and result stored."""
 
     @pytest.mark.asyncio
     async def test_custom_validator_executed(self, tmp_path: Path) -> None:
-        """IT-004: Validator returning EXCELLENT with score 0.95."""
+        """EXPERIMENT-RUNNER:IT-004: Validator returning EXCELLENT with score 0.95."""
         cases_dir = tmp_path / "cases"
         cases_dir.mkdir()
         case_dir = cases_dir / "v-case"
@@ -224,7 +224,7 @@ class TestCustomValidatorExecuted:
 
 @pytest.mark.slow
 class TestStress100Cells:
-    """NFR-002: Stress test with 100+ cells."""
+    """EXPERIMENT-RUNNER:NFR-002: Stress test with 100+ cells."""
 
     @pytest.mark.asyncio
     async def test_stress_100_cells(self, tmp_path: Path) -> None:

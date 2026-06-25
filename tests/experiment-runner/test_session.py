@@ -1,4 +1,4 @@
-# COVERS: REQ-001, UT-001
+# COVERS: EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:UT-001
 
 """Tests for session name generation."""
 
@@ -8,10 +8,10 @@ from zrb_llm_evaluator.loader import make_session_name
 
 
 class TestSessionNameGeneration:
-    """Tests for unique session names — @sdlc REQ-001."""
+    """Tests for unique session names — @sdlc EXPERIMENT-RUNNER:REQ-001."""
 
     def test_session_name_generates_unique_per_trial(self) -> None:
-        """UT-001: Three unique session strings, each containing model/case/trial."""
+        """EXPERIMENT-RUNNER:UT-001: Three unique session strings, each containing model/case/trial."""
         names = set()
         for trial in range(1, 4):
             name = make_session_name("openai:gpt-4o", "py-test", trial)

@@ -1,5 +1,5 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: REQ-009, REQ-011, REQ-013, RULE-001, RULE-004
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-011, EXPERIMENT-RUNNER:REQ-013, RULE-001, RULE-004
 
 """Protocol definitions for pluggable validators."""
 
@@ -11,7 +11,7 @@ from typing import Protocol, runtime_checkable
 from zrb_llm_evaluator.models import TrialTrace, ValidationResult
 
 
-# @sdlc REQ-009, REQ-011, REQ-013, RULE-004
+# @sdlc EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-011, EXPERIMENT-RUNNER:REQ-013, RULE-004
 @runtime_checkable
 class ValidatorProtocol(Protocol):
     """Protocol that all test case validators must implement.

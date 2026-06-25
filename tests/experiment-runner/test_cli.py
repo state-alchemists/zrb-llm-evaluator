@@ -1,4 +1,4 @@
-# COVERS: REQ-014, REQ-017, UT-016, UT-050, UT-053, UT-054, UT-055, UT-057
+# COVERS: EXPERIMENT-RUNNER:REQ-014, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-032, EXPERIMENT-RUNNER:REQ-033, EXPERIMENT-RUNNER:UT-016, EXPERIMENT-RUNNER:UT-050, EXPERIMENT-RUNNER:UT-053, EXPERIMENT-RUNNER:UT-054, EXPERIMENT-RUNNER:UT-055, EXPERIMENT-RUNNER:UT-057
 
 """Tests for CLI argument validation."""
 
@@ -16,10 +16,10 @@ runner = CliRunner()
 
 
 class TestCLIRequiredArgs:
-    """Tests for CLI argument validation — @sdlc REQ-014."""
+    """Tests for CLI argument validation — @sdlc EXPERIMENT-RUNNER:REQ-014."""
 
     def test_missing_required_args_exits(self) -> None:
-        """UT-016: No args => non-zero exit, usage printed."""
+        """EXPERIMENT-RUNNER:UT-016: No args => non-zero exit, usage printed."""
         result = runner.invoke(app, ["run"])
         assert result.exit_code != 0
 
@@ -64,7 +64,7 @@ class TestCLIRequiredArgs:
         assert result.exit_code in (0, 1, 2)
 
     def test_report_command_corrupt_json(self, tmp_path) -> None:
-        """UT-050: Corrupt experiment.json => report subcommand exits non-zero."""
+        """EXPERIMENT-RUNNER:UT-050: Corrupt experiment.json => report subcommand exits non-zero."""
         out_dir = tmp_path / "out"
         out_dir.mkdir(parents=True)
         (out_dir / "experiment.json").write_text("{bad json", encoding="utf-8")
@@ -76,7 +76,7 @@ class TestCLIRequiredArgs:
         assert result.exit_code != 0
 
     def test_report_happy_path(self, tmp_path) -> None:
-        """UT-053: Valid experiment.json => report exits 0 and writes report.md."""
+        """EXPERIMENT-RUNNER:UT-053: Valid experiment.json => report exits 0 and writes report.md."""
         out_dir = tmp_path / "out"
         out_dir.mkdir(parents=True)
 
@@ -113,7 +113,7 @@ class TestCLIRequiredArgs:
         assert (out_dir / "report.md").is_file()
 
     def test_list_with_valid_results(self, tmp_path) -> None:
-        """UT-054: Valid results.json => list exits 0 and prints model names."""
+        """EXPERIMENT-RUNNER:UT-054: Valid results.json => list exits 0 and prints model names."""
         out_dir = tmp_path / "out"
         out_dir.mkdir(parents=True)
 
@@ -152,7 +152,7 @@ class TestCLIRequiredArgs:
         assert "test:m2" in result.output
 
     def test_list_missing_file(self, tmp_path) -> None:
-        """UT-055: No results.json => list exits non-zero."""
+        """EXPERIMENT-RUNNER:UT-055: No results.json => list exits non-zero."""
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
 
@@ -164,7 +164,7 @@ class TestCLIRequiredArgs:
         assert "No results found" in result.output
 
     def test_config_path_resolution(self, tmp_path) -> None:
-        """UT-057: Relative test_case_dirs resolve to absolute paths."""
+        """EXPERIMENT-RUNNER:UT-057: Relative test_case_dirs resolve to absolute paths."""
         config = ExperimentConfig(
             models=["test:m1"],
             test_case_dirs=[Path("relative/case")],

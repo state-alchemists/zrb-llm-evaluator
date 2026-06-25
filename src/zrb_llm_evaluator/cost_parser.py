@@ -1,5 +1,5 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: REQ-019
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-019
 
 """Parse cost / token summary lines and tool calls from zrb output."""
 
@@ -12,7 +12,7 @@ from typing import Any
 
 from zrb_llm_evaluator.models import ToolCallRecord, TrialTrace
 
-# @sdlc REQ-019
+# @sdlc EXPERIMENT-RUNNER:REQ-019
 # Matches a single 💸 token-summary line emitted by zrb
 # (`zrb/llm/util/stream_response.py`). Example:
 #   💸 (Requests: 4 | Tool Calls: 7 | Total: 1500) Input: 1000 |
@@ -29,7 +29,7 @@ _COST_LINE_PATTERN = re.compile(
 )
 
 
-# @sdlc REQ-019
+# @sdlc EXPERIMENT-RUNNER:REQ-019
 def parse_cost_summary(stdout: str) -> dict[str, int]:
     """Parse token counts from a zrb 💸 cost summary line in stdout.
 
@@ -65,7 +65,7 @@ def parse_cost_summary(stdout: str) -> dict[str, int]:
     return result
 
 
-# @sdlc REQ-019
+# @sdlc EXPERIMENT-RUNNER:REQ-019
 def extract_tool_calls_from_history(history_path: Path) -> list[str]:
     """Extract tool-call names from a zrb history JSON file.
 
@@ -100,7 +100,7 @@ def extract_tool_calls_from_history(history_path: Path) -> list[str]:
     return names
 
 
-# @sdlc REQ-019
+# @sdlc EXPERIMENT-RUNNER:REQ-019
 def count_tool_calls_from_history(history_path: Path) -> tuple[list[str], int]:
     """Return ``(tool_call_names, count)`` for the given history file.
 

@@ -1,4 +1,4 @@
-# COVERS: REQ-006, UT-006
+# COVERS: EXPERIMENT-RUNNER:REQ-006, EXPERIMENT-RUNNER:UT-006
 
 """Tests for resume functionality."""
 
@@ -11,10 +11,10 @@ from zrb_llm_evaluator.runner import ResumeManager
 
 
 class TestResumeManager:
-    """Tests for the ResumeManager — @sdlc REQ-006."""
+    """Tests for the ResumeManager — @sdlc EXPERIMENT-RUNNER:REQ-006."""
 
     def test_resume_skips_terminal_cells(self, sample_results_json: Path) -> None:
-        """UT-006: Skips terminal cells, only executes pending ones."""
+        """EXPERIMENT-RUNNER:UT-006: Skips terminal cells, only executes pending ones."""
         mgr = ResumeManager(sample_results_json)
         mgr.load()
 
