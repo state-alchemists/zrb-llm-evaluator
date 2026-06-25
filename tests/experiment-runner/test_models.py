@@ -1,4 +1,4 @@
-# COVERS: REQ-015, REQ-019, UT-017, UT-018, UT-022, UT-023, UT-049
+# COVERS: EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:UT-017, EXPERIMENT-RUNNER:UT-018, EXPERIMENT-RUNNER:UT-022, EXPERIMENT-RUNNER:UT-023, EXPERIMENT-RUNNER:UT-049
 
 """Tests for Pydantic models."""
 
@@ -15,10 +15,10 @@ from zrb_llm_evaluator.models import (
 
 
 class TestExperimentConfig:
-    """Tests for ExperimentConfig model — @sdlc REQ-015."""
+    """Tests for ExperimentConfig model — @sdlc EXPERIMENT-RUNNER:REQ-015."""
 
     def test_model_format_provider_colon_name(self) -> None:
-        """UT-017: 'openai:gpt-4o' is accepted."""
+        """EXPERIMENT-RUNNER:UT-017: 'openai:gpt-4o' is accepted."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=["/tmp/case"],
@@ -27,7 +27,7 @@ class TestExperimentConfig:
         assert config.models == ["openai:gpt-4o"]
 
     def test_model_format_rejects_bare_name(self) -> None:
-        """UT-018: 'gpt-4o' (no colon) is rejected."""
+        """EXPERIMENT-RUNNER:UT-018: 'gpt-4o' (no colon) is rejected."""
         with pytest.raises(ValidationError) as exc:
             ExperimentConfig(
                 models=["gpt-4o"],
@@ -66,7 +66,7 @@ class TestExperimentConfig:
             )
 
     def test_cli_name_empty_rejected(self) -> None:
-        """UT-049: Empty cli_name is rejected."""
+        """EXPERIMENT-RUNNER:UT-049: Empty cli_name is rejected."""
         with pytest.raises(ValidationError):
             ExperimentConfig(
                 models=["openai:gpt-4o"],
@@ -77,10 +77,10 @@ class TestExperimentConfig:
 
 
 class TestTrialResult:
-    """Tests for TrialResult model — @sdlc REQ-017, REQ-019."""
+    """Tests for TrialResult model — @sdlc EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-019."""
 
     def test_token_fields_default_zero(self) -> None:
-        """UT-023: Token fields default to 0 when absent."""
+        """EXPERIMENT-RUNNER:UT-023: Token fields default to 0 when absent."""
         result = TrialResult(
             model="openai:gpt-4o",
             test_case="case-a",

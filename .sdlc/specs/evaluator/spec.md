@@ -1,5 +1,7 @@
 # Feature Spec: evaluator
 
+**Feature Key:** EVALUATOR
+
 > Multi-trial experiment runner for `zrb chat`. Reverse-engineered from code at commit `8a52af8`.
 
 ## Requirements

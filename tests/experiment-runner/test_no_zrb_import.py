@@ -1,4 +1,4 @@
-# COVERS: RULE-005, UT-025
+# COVERS: RULE-005, EXPERIMENT-RUNNER:UT-025
 
 """Test that the runner does not import zrb internals."""
 
@@ -12,7 +12,7 @@ class TestNoZrbImport:
     """Ensures runner module avoids importing zrb — @sdlc RULE-005."""
 
     def test_no_zrb_import_in_runner(self) -> None:
-        """UT-025: Running 'python -c' that imports the runner should not import zrb."""
+        """EXPERIMENT-RUNNER:UT-025: Running 'python -c' that imports the runner should not import zrb."""
         code = """
 import sys
 # Import all runner-related modules

@@ -1,4 +1,4 @@
-# COVERS: REQ-030, REQ-035, REQ-036, REQ-037, REQ-038, IT-A001
+# COVERS: REPORT-AGGREGATE:REQ-030, REPORT-AGGREGATE:REQ-035, REPORT-AGGREGATE:REQ-036, REPORT-AGGREGATE:REQ-037, REPORT-AGGREGATE:REQ-038, IT-A001
 
 """Integration test: aggregate values match the per-trial Summary table."""
 
@@ -169,7 +169,7 @@ def test_full_report_aggregates_match_per_trial_summary(tmp_path: Path) -> None:
         fa = int(cells[4])
         to = int(cells[5])
         er = int(cells[6])
-        avg = float(cells[7])
+        avg = float(cells[-1])  # Avg dur (s) is the last column
         expected_counts = by_model_expected[model]
         assert trials_n == sum(expected_counts.values()), (model, trials_n)
         assert ex == expected_counts["EXCELLENT"]

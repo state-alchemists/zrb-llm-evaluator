@@ -1,6 +1,6 @@
-# COVERS: REQ-025, REQ-026, REQ-027, REQ-028, REQ-029,
-#   UT-032, UT-033, UT-034, UT-035, UT-036, UT-037, UT-038, UT-039,
-#   UT-040, UT-041, UT-042, IT-006, E2E-004
+# COVERS: EXPERIMENT-RUNNER:REQ-025, EXPERIMENT-RUNNER:REQ-026, EXPERIMENT-RUNNER:REQ-027, EXPERIMENT-RUNNER:REQ-028, EXPERIMENT-RUNNER:REQ-029,
+#   EXPERIMENT-RUNNER:UT-032, EXPERIMENT-RUNNER:UT-033, EXPERIMENT-RUNNER:UT-034, EXPERIMENT-RUNNER:UT-035, EXPERIMENT-RUNNER:UT-036, EXPERIMENT-RUNNER:UT-037, EXPERIMENT-RUNNER:UT-038, EXPERIMENT-RUNNER:UT-039,
+#   EXPERIMENT-RUNNER:UT-040, EXPERIMENT-RUNNER:UT-041, EXPERIMENT-RUNNER:UT-042, EXPERIMENT-RUNNER:IT-006, EXPERIMENT-RUNNER:E2E-004
 
 """Markdown report rendering tests (sort order, bold-best, status icons)."""
 
@@ -135,7 +135,7 @@ COL_TOOL_CALLS = 10
 
 
 # ---------------------------------------------------------------------------
-# UT-032 / REQ-025 — rows sorted by (model, case, trial_index) ASC
+# EXPERIMENT-RUNNER:UT-032 / EXPERIMENT-RUNNER:REQ-025 — rows sorted by (model, case, trial_index) ASC
 # ---------------------------------------------------------------------------
 
 
@@ -170,7 +170,7 @@ def test_markdown_report_rows_sorted_by_model_case_trial(tmp_path: Path) -> None
 
 
 # ---------------------------------------------------------------------------
-# UT-033 / REQ-026 — failures excluded from bold scope
+# EXPERIMENT-RUNNER:UT-033 / EXPERIMENT-RUNNER:REQ-026 — failures excluded from bold scope
 # ---------------------------------------------------------------------------
 
 
@@ -198,7 +198,7 @@ def test_markdown_report_excludes_failures_from_bold_scope(
 
 
 # ---------------------------------------------------------------------------
-# UT-034 / REQ-026 — bold scope is per-test-case
+# EXPERIMENT-RUNNER:UT-034 / EXPERIMENT-RUNNER:REQ-026 — bold scope is per-test-case
 # ---------------------------------------------------------------------------
 
 
@@ -218,7 +218,7 @@ def test_markdown_report_bold_scope_is_per_test_case(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-035 / REQ-027 — no HTML
+# EXPERIMENT-RUNNER:UT-035 / EXPERIMENT-RUNNER:REQ-027 — no HTML
 # ---------------------------------------------------------------------------
 
 
@@ -242,7 +242,7 @@ def test_markdown_report_contains_no_html(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-036 / REQ-028 — bold best duration
+# EXPERIMENT-RUNNER:UT-036 / EXPERIMENT-RUNNER:REQ-028 — bold best duration
 # ---------------------------------------------------------------------------
 
 
@@ -261,7 +261,7 @@ def test_markdown_report_bolds_best_duration(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-037 / REQ-028 — bold best score
+# EXPERIMENT-RUNNER:UT-037 / EXPERIMENT-RUNNER:REQ-028 — bold best score
 # ---------------------------------------------------------------------------
 
 
@@ -286,7 +286,7 @@ def test_markdown_report_bolds_best_score(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-038 / REQ-028 — bold best total_tokens
+# EXPERIMENT-RUNNER:UT-038 / EXPERIMENT-RUNNER:REQ-028 — bold best total_tokens
 # ---------------------------------------------------------------------------
 
 
@@ -311,7 +311,7 @@ def test_markdown_report_bolds_best_total_tokens(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-039 / REQ-028 — bold best tool_call_count
+# EXPERIMENT-RUNNER:UT-039 / EXPERIMENT-RUNNER:REQ-028 — bold best tool_call_count
 # ---------------------------------------------------------------------------
 
 
@@ -336,7 +336,7 @@ def test_markdown_report_bolds_best_tool_call_count(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-040 / REQ-028 — ties bold all matching cells
+# EXPERIMENT-RUNNER:UT-040 / EXPERIMENT-RUNNER:REQ-028 — ties bold all matching cells
 # ---------------------------------------------------------------------------
 
 
@@ -355,7 +355,7 @@ def test_markdown_report_bolds_all_tied_cells(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# UT-041 / REQ-029 — status icons mapped correctly
+# EXPERIMENT-RUNNER:UT-041 / EXPERIMENT-RUNNER:REQ-029 — status icons mapped correctly
 # ---------------------------------------------------------------------------
 
 
@@ -386,7 +386,7 @@ def test_markdown_report_status_icons_mapped(
 
 
 # ---------------------------------------------------------------------------
-# UT-042 / REQ-025 — deterministic byte-identical output
+# EXPERIMENT-RUNNER:UT-042 / EXPERIMENT-RUNNER:REQ-025 — deterministic byte-identical output
 # ---------------------------------------------------------------------------
 
 
@@ -416,7 +416,7 @@ def test_markdown_report_deterministic_byte_identical(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# IT-006 — full pipeline: sort + bold + icons + no HTML
+# EXPERIMENT-RUNNER:IT-006 — full pipeline: sort + bold + icons + no HTML
 # ---------------------------------------------------------------------------
 
 
@@ -495,7 +495,7 @@ def test_report_md_full_pipeline_sort_bold_icons(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# E2E-004 — user-scannable report
+# EXPERIMENT-RUNNER:E2E-004 — user-scannable report
 # ---------------------------------------------------------------------------
 
 

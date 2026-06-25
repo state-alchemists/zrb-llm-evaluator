@@ -1,5 +1,5 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: REQ-004, REQ-015, REQ-017
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-017
 
 """The zrb-llm-evaluator package — multi-trial experiment runner."""
 

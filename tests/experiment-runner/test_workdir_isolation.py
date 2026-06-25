@@ -1,5 +1,5 @@
-# COVERS: REQ-020, REQ-021, REQ-022, REQ-023, REQ-024,
-#   UT-027, UT-028, UT-029, UT-030, UT-031, IT-005
+# COVERS: EXPERIMENT-RUNNER:REQ-020, EXPERIMENT-RUNNER:REQ-021, EXPERIMENT-RUNNER:REQ-022, EXPERIMENT-RUNNER:REQ-023, EXPERIMENT-RUNNER:REQ-024,
+# COVERS: EXPERIMENT-RUNNER:UT-027, EXPERIMENT-RUNNER:UT-028, EXPERIMENT-RUNNER:UT-029, EXPERIMENT-RUNNER:UT-030, EXPERIMENT-RUNNER:UT-031, EXPERIMENT-RUNNER:IT-005
 
 """Tests for the per-trial nested workdir isolation (ADR-7)."""
 
@@ -63,9 +63,9 @@ def _make_case(
     return case_dir
 
 
-# @sdlc REQ-020
+# @sdlc EXPERIMENT-RUNNER:REQ-020
 class TestSubprocessCwdIsNestedWorkdir:
-    """UT-027 / REQ-020 — subprocess cwd is the nested workdir, not the cell dir."""
+    """EXPERIMENT-RUNNER:UT-027 / EXPERIMENT-RUNNER:REQ-020 — subprocess cwd is the nested workdir, not the cell dir."""
 
     @pytest.mark.asyncio
     async def test_subprocess_cwd_is_nested_workdir(self, tmp_path: Path) -> None:
@@ -92,9 +92,9 @@ class TestSubprocessCwdIsNestedWorkdir:
         assert Path(cwd) == cell_dir / "workdir"
 
 
-# @sdlc REQ-021
+# @sdlc EXPERIMENT-RUNNER:REQ-021
 class TestEvaluationArtifactsOutsideWorkdir:
-    """UT-028 / REQ-021 — stdout.log + history/ are siblings of workdir/."""
+    """EXPERIMENT-RUNNER:UT-028 / EXPERIMENT-RUNNER:REQ-021 — stdout.log + history/ are siblings of workdir/."""
 
     @pytest.mark.asyncio
     async def test_evaluation_artifacts_outside_workdir(self, tmp_path: Path) -> None:
@@ -121,9 +121,9 @@ class TestEvaluationArtifactsOutsideWorkdir:
         assert not (cell_dir / "workdir" / "history").exists()
 
 
-# @sdlc REQ-022
+# @sdlc EXPERIMENT-RUNNER:REQ-022
 class TestEmptyWorkdirCreatedWhenNoSource:
-    """UT-029 / REQ-022 — empty workdir created when test case has no workdir/."""
+    """EXPERIMENT-RUNNER:UT-029 / EXPERIMENT-RUNNER:REQ-022 — empty workdir created when test case has no workdir/."""
 
     @pytest.mark.asyncio
     async def test_empty_workdir_created_when_no_source(self, tmp_path: Path) -> None:
@@ -146,9 +146,9 @@ class TestEmptyWorkdirCreatedWhenNoSource:
         assert list(nested.iterdir()) == []
 
 
-# @sdlc REQ-023
+# @sdlc EXPERIMENT-RUNNER:REQ-023
 class TestStagedFilesLandInNestedWorkdir:
-    """UT-030 / REQ-023 — staged files land in cell_dir/workdir/, not cell_dir."""
+    """EXPERIMENT-RUNNER:UT-030 / EXPERIMENT-RUNNER:REQ-023 — staged files land in cell_dir/workdir/, not cell_dir."""
 
     @pytest.mark.asyncio
     async def test_staged_files_land_in_nested_workdir(self, tmp_path: Path) -> None:
@@ -179,9 +179,9 @@ class TestStagedFilesLandInNestedWorkdir:
         assert not (cell_dir / "data").exists()
 
 
-# @sdlc REQ-024
+# @sdlc EXPERIMENT-RUNNER:REQ-024
 class TestMetadataFilesNeverStaged:
-    """UT-031 / REQ-024 — validator.py / instruction.txt never copied into workdir."""
+    """EXPERIMENT-RUNNER:UT-031 / EXPERIMENT-RUNNER:REQ-024 — validator.py / instruction.txt never copied into workdir."""
 
     @pytest.mark.asyncio
     async def test_metadata_files_never_staged(self, tmp_path: Path) -> None:
@@ -209,9 +209,9 @@ class TestMetadataFilesNeverStaged:
         assert not (nested / "instruction.txt").exists()
 
 
-# @sdlc REQ-020, REQ-021, REQ-024
+# @sdlc EXPERIMENT-RUNNER:REQ-020, EXPERIMENT-RUNNER:REQ-021, EXPERIMENT-RUNNER:REQ-024
 class TestIsolationEndToEnd:
-    """IT-005 / REQ-020 + REQ-021 + REQ-024 — real subprocess sees only staged files."""
+    """EXPERIMENT-RUNNER:IT-005 / EXPERIMENT-RUNNER:REQ-020 + EXPERIMENT-RUNNER:REQ-021 + EXPERIMENT-RUNNER:REQ-024 — real subprocess sees only staged files."""
 
     @pytest.mark.asyncio
     async def test_isolation_end_to_end(self, tmp_path: Path) -> None:

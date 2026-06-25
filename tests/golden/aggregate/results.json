@@ -11,6 +11,7 @@
     "parallelism": 1,
     "timeout": 30,
     "cli_name": "zrb",
+    "cli_version": "",
     "env_prefix": "ZRB"
   },
   "results": [
