@@ -350,12 +350,12 @@ class TrialRunner:
                     except ProcessLookupError:
                         pass
                     await proc.wait()
-                    log_file.flush()
                     log_file.write(
                         f"\n[TIMEOUT after {self._config.timeout}s]\n".encode(
                             "utf-8",
                         ),
                     )
+                    log_file.flush()
                     duration = time.monotonic() - start
                     # @sdlc EXPERIMENT-RUNNER:REQ-008, EXPERIMENT-RUNNER:REQ-040: preserve
                     # partial history on disk even for adapters that don't
@@ -363,6 +363,15 @@ class TrialRunner:
                     self._snapshot_history_if_missing(history_log_path, log_path)
                     tool_calls, tool_call_count = self._cli_adapter.extract_tool_calls(
                         history_log_path,
+                    )
+                    # Forensic validation: the agent may have finished the
+                    # actual work before hanging, so record what the
+                    # validator thinks of the on-disk state. The status
+                    # stays TIMEOUT regardless — this only makes "timed out
+                    # but complete" distinguishable from "timed out with
+                    # nothing done" in the results.
+                    timeout_verification = self._validate_after_timeout(
+                        nested_workdir, log_path, history_log_path,
                     )
                     return TrialResult(
                         model=model,
@@ -373,6 +382,7 @@ class TrialRunner:
                         exit_code=-1,
                         log_path=str(history_log_path),
                         stdout_log_path=str(log_path),
+                        verification_result=timeout_verification,
                         tool_calls=tool_calls,
                         tool_call_count=tool_call_count,
                     )
@@ -387,8 +397,15 @@ class TrialRunner:
             usage = self._cli_adapter.parse_usage(stdout)
 
             # Determine status based on exit code and verification markers
-            # @sdlc EXPERIMENT-RUNNER:REQ-007: verification marker overrides exit code
-            verification_marker = _extract_verification_marker(stdout)
+            # @sdlc EXPERIMENT-RUNNER:REQ-007: verification marker overrides exit code,
+            # but only when the experiment explicitly opts in — otherwise any
+            # agent that prints "VERIFICATION_RESULT: EXCELLENT" would grade
+            # itself past the validator.
+            verification_marker = (
+                _extract_verification_marker(stdout)
+                if self._config.honor_verification_marker
+                else None
+            )
             if verification_marker is not None:
                 status = verification_marker
             elif exit_code != 0:
@@ -497,6 +514,35 @@ class TrialRunner:
             history_log_path.write_text(content, encoding="utf-8")
         except OSError:
             pass
+
+    def _validate_after_timeout(
+        self,
+        nested_workdir: Path,
+        log_path: Path,
+        history_log_path: Path,
+    ) -> ValidationResult | None:
+        """Run the validator over a timed-out trial's on-disk state.
+
+        Purely forensic (the trial status stays ``TIMEOUT``), so this is
+        best-effort: any validator failure returns ``None`` instead of
+        propagating.
+        """
+        if self._test_case.validator is None:
+            return None
+        try:
+            log_content = (
+                log_path.read_text(encoding="utf-8", errors="replace")
+                if log_path.is_file()
+                else ""
+            )
+            trace = build_trial_trace(history_log_path)
+            return self._test_case.validator.validate(
+                output_dir=nested_workdir,
+                log_content=log_content,
+                trace=trace,
+            )
+        except Exception:
+            return None
 
 
 # ---------------------------------------------------------------------------

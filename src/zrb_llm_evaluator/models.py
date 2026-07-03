@@ -124,6 +124,13 @@ class ExperimentConfig(BaseModel):
     # `cli_adapters.resolve_cli_adapter` — not here — so a dotted path to a
     # not-yet-importable module doesn't fail Pydantic validation itself.
     cli_template: str = Field(default="zrb", min_length=1)
+    # @sdlc EXPERIMENT-RUNNER:REQ-007
+    # When False (default), a "VERIFICATION_RESULT:" line in the subprocess
+    # stdout is ignored and the validator (or exit code) alone decides the
+    # trial status. The marker lets the agent under test grade itself, so
+    # honoring it is opt-in for test cases whose instructions deliberately
+    # ask the agent to self-report.
+    honor_verification_marker: bool = False
 
     # @sdlc EXPERIMENT-RUNNER:REQ-015
     @field_validator("models")

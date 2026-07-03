@@ -13,7 +13,8 @@
     "cli_name": "zrb",
     "cli_version": "",
     "env_prefix": "ZRB",
-    "cli_template": "zrb"
+    "cli_template": "zrb",
+    "honor_verification_marker": false
   },
   "results": [
     {

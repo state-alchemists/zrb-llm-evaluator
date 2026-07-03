@@ -88,6 +88,15 @@ def run(
     output_dir: str = typer.Option(
         "./out", "--output-dir", help="Output directory for results",
     ),
+    honor_verification_marker: bool = typer.Option(
+        False,
+        "--honor-verification-marker",
+        help=(
+            "Let a 'VERIFICATION_RESULT:' line in the agent's stdout override "
+            "the validator verdict. Off by default because it lets the agent "
+            "under test grade itself."
+        ),
+    ),
 ) -> None:
     """Run a full experiment: N models x M test cases x T trials."""
     _setup_logging()
@@ -108,6 +117,7 @@ def run(
             cli_version=cli_ver,
             env_prefix=env_prefix,
             cli_template=cli_template,
+            honor_verification_marker=honor_verification_marker,
         )
     except Exception as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
