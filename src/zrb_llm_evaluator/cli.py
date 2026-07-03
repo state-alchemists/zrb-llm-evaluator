@@ -1,5 +1,8 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-014, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-032, EXPERIMENT-RUNNER:REQ-033, RULE-011, RULE-012
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-014, EXPERIMENT-RUNNER:REQ-015,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-032, EXPERIMENT-RUNNER:REQ-033,
+# IMPLEMENTS: RULE-011, RULE-012
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-038
 
 """Typer CLI entry point for the experiment runner."""
 
@@ -12,6 +15,7 @@ from pathlib import Path
 
 import typer
 
+from zrb_llm_evaluator.cli_adapters import resolve_cli_adapter
 from zrb_llm_evaluator.loader import load_test_cases
 from zrb_llm_evaluator.models import ExperimentConfig
 from zrb_llm_evaluator.reporter import generate_json_report, generate_markdown_report
@@ -50,7 +54,8 @@ def _setup_logging() -> None:
     pkg_logger.setLevel(logging.INFO)
 
 
-# @sdlc EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-014, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-016
+# @sdlc EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-014, EXPERIMENT-RUNNER:REQ-015,
+# @sdlc EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-038
 @app.command()
 def run(
     models: str = typer.Option(
@@ -71,6 +76,14 @@ def run(
     cli_name: str = typer.Option("zrb", "--cli-name", help="CLI binary name"),
     env_prefix: str = typer.Option(
         "ZRB", "--env-prefix", help="Env var prefix (default ZRB → ZRB_LLM_*)",
+    ),
+    cli_template: str = typer.Option(
+        "zrb",
+        "--cli-template",
+        help=(
+            "CliAdapter to use: 'zrb' (default), 'claude-code', 'opencode', "
+            "or a dotted import path to a custom CliAdapter class"
+        ),
     ),
     output_dir: str = typer.Option(
         "./out", "--output-dir", help="Output directory for results",
@@ -94,9 +107,19 @@ def run(
             cli_name=cli_name,
             cli_version=cli_ver,
             env_prefix=env_prefix,
+            cli_template=cli_template,
         )
     except Exception as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
+        raise typer.Exit(code=1)
+
+    # @sdlc EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-038: resolve the CliAdapter
+    # before any trial begins so a bad --cli-template fails fast with a
+    # clear error (INVALID_TEMPLATE), same pattern as invalid test cases below.
+    try:
+        resolve_cli_adapter(config.cli_template)
+    except ValueError as exc:
+        typer.echo(f"CLI template error: {exc}", err=True)
         raise typer.Exit(code=1)
 
     # Load test cases (validates validator protocol at load time)

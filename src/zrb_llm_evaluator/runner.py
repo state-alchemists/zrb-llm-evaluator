@@ -1,9 +1,16 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-006, EXPERIMENT-RUNNER:REQ-007, EXPERIMENT-RUNNER:REQ-008,
-# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-010, EXPERIMENT-RUNNER:REQ-011, EXPERIMENT-RUNNER:REQ-012, EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-018, EXPERIMENT-RUNNER:REQ-019,
-# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-020, EXPERIMENT-RUNNER:REQ-021, EXPERIMENT-RUNNER:REQ-022, EXPERIMENT-RUNNER:REQ-023, EXPERIMENT-RUNNER:REQ-024,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-003,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-006,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-007, EXPERIMENT-RUNNER:REQ-008,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-010, EXPERIMENT-RUNNER:REQ-011,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-012, EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-017,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-018, EXPERIMENT-RUNNER:REQ-019,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-020, EXPERIMENT-RUNNER:REQ-021, EXPERIMENT-RUNNER:REQ-022,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-023, EXPERIMENT-RUNNER:REQ-024,
 # IMPLEMENTS: EXPERIMENT-RUNNER:NFR-001, EXPERIMENT-RUNNER:NFR-002, RULE-005, RULE-012
 # IMPLEMENTS: EXPERIMENT-RUNNER:REQ-030, EXPERIMENT-RUNNER:REQ-031
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-036, EXPERIMENT-RUNNER:REQ-038,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-039, EXPERIMENT-RUNNER:REQ-040
 
 """Async experiment runner with subprocess orchestration."""
 
@@ -22,11 +29,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from zrb_llm_evaluator.cost_parser import (
-    build_trial_trace,
-    count_tool_calls_from_history,
-    parse_cost_summary,
-)
+from zrb_llm_evaluator.cli_adapters import resolve_cli_adapter
+from zrb_llm_evaluator.cost_parser import build_trial_trace
 from zrb_llm_evaluator.loader import TestCase, make_safe_name, make_session_name
 from zrb_llm_evaluator.models import (
     Experiment,
@@ -35,6 +39,7 @@ from zrb_llm_evaluator.models import (
     ValidationCheck,
     ValidationResult,
 )
+from zrb_llm_evaluator.protocols import CliAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -204,15 +209,25 @@ class ResumeManager:
 # Per-trial runner
 # ---------------------------------------------------------------------------
 
-# @sdlc EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-012, EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-018, EXPERIMENT-RUNNER:REQ-020, EXPERIMENT-RUNNER:REQ-021, EXPERIMENT-RUNNER:REQ-022, EXPERIMENT-RUNNER:REQ-023, EXPERIMENT-RUNNER:REQ-024
+# @sdlc EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-012,
+# @sdlc EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-018, EXPERIMENT-RUNNER:REQ-020,
+# @sdlc EXPERIMENT-RUNNER:REQ-021, EXPERIMENT-RUNNER:REQ-022, EXPERIMENT-RUNNER:REQ-023,
+# @sdlc EXPERIMENT-RUNNER:REQ-024, EXPERIMENT-RUNNER:REQ-035,
+# @sdlc EXPERIMENT-RUNNER:REQ-039, EXPERIMENT-RUNNER:REQ-040
 class TrialRunner:
-    """Executes a single trial as a subprocess."""
+    """Executes a single trial as a subprocess.
+
+    All CLI-specific behavior (argv, env vars, and output parsing) is
+    delegated to a resolved ``CliAdapter`` (REQ-035) — this class contains
+    no CLI-specific logic of its own (RULE-005).
+    """
 
     def __init__(
         self,
         config: ExperimentConfig,
         test_case: TestCase,
         output_dir: Path,
+        cli_adapter: CliAdapter | None = None,
     ) -> None:
         """Initialize the trial runner.
 
@@ -221,13 +236,30 @@ class TrialRunner:
             config: Experiment configuration.
             test_case: The test case to run.
             output_dir: Root output directory.
+            cli_adapter: The resolved ``CliAdapter`` to use for every trial
+                run through this instance. When omitted, it is resolved
+                from ``config.cli_template`` (defaults to the ``zrb``
+                adapter) — callers that already resolved one adapter for
+                the whole experiment (e.g. ``WorkSteward``) should pass it
+                explicitly so resolution truly happens once per experiment.
+
+        Raises:
+        ------
+            ValueError: If ``cli_adapter`` is omitted and ``config.cli_template``
+                cannot be resolved to a valid ``CliAdapter`` (REQ-038).
 
         """
         self._config = config
         self._test_case = test_case
         self._output_dir = output_dir
+        self._cli_adapter = (
+            cli_adapter if cli_adapter is not None else resolve_cli_adapter(config.cli_template)
+        )
 
-    # @sdlc EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-018, EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:REQ-020, EXPERIMENT-RUNNER:REQ-021, EXPERIMENT-RUNNER:REQ-022, EXPERIMENT-RUNNER:REQ-023, EXPERIMENT-RUNNER:REQ-024
+    # @sdlc EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-016,
+    # @sdlc EXPERIMENT-RUNNER:REQ-018, EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:REQ-020,
+    # @sdlc EXPERIMENT-RUNNER:REQ-021, EXPERIMENT-RUNNER:REQ-022, EXPERIMENT-RUNNER:REQ-023,
+    # @sdlc EXPERIMENT-RUNNER:REQ-024
     async def run(self, model: str, trial_index: int) -> TrialResult:
         """Run a single trial.
 
@@ -281,11 +313,16 @@ class TrialRunner:
         journal_dir.mkdir(parents=True, exist_ok=True)
 
         log_path = cell_dir / "stdout.log"
-        history_log_path = history_dir / f"{session_name}.json"
-        prefix = self._config.env_prefix
-        env = os.environ.copy()
-        env[f"{prefix}_LLM_HISTORY_DIR"] = str(history_dir)
-        env[f"{prefix}_LLM_JOURNAL_DIR"] = str(journal_dir)
+        # @sdlc EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-040: argv, env, and the
+        # history file location are entirely adapter-owned — no CLI-specific
+        # logic lives in the runner itself (RULE-005).
+        history_log_path = self._cli_adapter.history_log_path(history_dir, session_name)
+        env = self._cli_adapter.build_env(
+            os.environ.copy(), history_dir, journal_dir, self._config.env_prefix,
+        )
+        argv = self._cli_adapter.build_argv(
+            self._config.cli_name, model, self._test_case.instruction, session_name,
+        )
 
         start = time.monotonic()
         # Stream subprocess stdout/stderr directly to disk so partial output
@@ -294,18 +331,7 @@ class TrialRunner:
         try:
             with open(log_path, "wb") as log_file:
                 proc = await asyncio.create_subprocess_exec(
-                    self._config.cli_name,
-                    "chat",
-                    "--interactive",
-                    "false",
-                    "--yolo",
-                    "true",
-                    "--model",
-                    model,
-                    "--message",
-                    self._test_case.instruction,
-                    "--session",
-                    session_name,
+                    *argv,
                     cwd=str(nested_workdir),
                     env=env,
                     stdout=log_file,
@@ -331,7 +357,11 @@ class TrialRunner:
                         ),
                     )
                     duration = time.monotonic() - start
-                    tool_calls, tool_call_count = count_tool_calls_from_history(
+                    # @sdlc EXPERIMENT-RUNNER:REQ-008, EXPERIMENT-RUNNER:REQ-040: preserve
+                    # partial history on disk even for adapters that don't
+                    # write it out-of-band (e.g. Claude Code, opencode).
+                    self._snapshot_history_if_missing(history_log_path, log_path)
+                    tool_calls, tool_call_count = self._cli_adapter.extract_tool_calls(
                         history_log_path,
                     )
                     return TrialResult(
@@ -353,7 +383,8 @@ class TrialRunner:
 
             exit_code = proc.returncode or 0
             status: Literal["EXCELLENT", "PASS", "FAIL", "TIMEOUT", "ERROR"]
-            token_fields = parse_cost_summary(stdout)
+            # @sdlc EXPERIMENT-RUNNER:REQ-039: usage is exclusively adapter-derived.
+            usage = self._cli_adapter.parse_usage(stdout)
 
             # Determine status based on exit code and verification markers
             # @sdlc EXPERIMENT-RUNNER:REQ-007: verification marker overrides exit code
@@ -365,6 +396,8 @@ class TrialRunner:
             else:
                 # Default: non-ERROR status (will be determined by validator)
                 status = "PASS"
+
+            self._snapshot_history_if_missing(history_log_path, log_path)
 
             # @sdlc EXPERIMENT-RUNNER:REQ-009: invoke validator if exit was clean
             verification_result: ValidationResult | None = None
@@ -395,7 +428,7 @@ class TrialRunner:
                         ],
                     )
 
-            tool_calls, tool_call_count = count_tool_calls_from_history(
+            tool_calls, tool_call_count = self._cli_adapter.extract_tool_calls(
                 history_log_path,
             )
             return TrialResult(
@@ -408,10 +441,10 @@ class TrialRunner:
                 log_path=str(history_log_path),
                 stdout_log_path=str(log_path),
                 verification_result=verification_result,
-                total_tokens=token_fields["total_tokens"],
-                input_tokens=token_fields["input_tokens"],
-                output_tokens=token_fields["output_tokens"],
-                cache_read_tokens=token_fields["cache_read_tokens"],
+                total_tokens=usage.total_tokens,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                cache_read_tokens=usage.cache_read_tokens,
                 tool_calls=tool_calls,
                 tool_call_count=tool_call_count,
             )
@@ -419,7 +452,8 @@ class TrialRunner:
         except Exception as exc:
             duration = time.monotonic() - start
             log_path.write_text(f"[ERROR: {exc}]\n", encoding="utf-8")
-            tool_calls, tool_call_count = count_tool_calls_from_history(
+            self._snapshot_history_if_missing(history_log_path, log_path)
+            tool_calls, tool_call_count = self._cli_adapter.extract_tool_calls(
                 history_log_path,
             )
             return TrialResult(
@@ -435,6 +469,35 @@ class TrialRunner:
                 tool_call_count=tool_call_count,
             )
 
+    # @sdlc EXPERIMENT-RUNNER:REQ-008, EXPERIMENT-RUNNER:REQ-040
+    @staticmethod
+    def _snapshot_history_if_missing(history_log_path: Path, stdout_log_path: Path) -> None:
+        """Ensure some content exists at ``history_log_path``.
+
+        The zrb adapter's history file is written externally by zrb itself
+        (via the ``{prefix}_LLM_HISTORY_DIR`` env var), so this is normally
+        a no-op for ``cli_template="zrb"``. Adapters that don't manage
+        history capture out-of-band (Claude Code, opencode) never populate
+        that path themselves, so the runner falls back to snapshotting the
+        captured stdout log there — this is what makes REQ-040's "write (or
+        point the runner to) conversation history" and REQ-008's "partial
+        history preserved on disk" guarantees hold regardless of adapter.
+        Best-effort: any filesystem error here is swallowed rather than
+        failing the trial.
+        """
+        if history_log_path.is_file():
+            return
+        try:
+            history_log_path.parent.mkdir(parents=True, exist_ok=True)
+            content = (
+                stdout_log_path.read_text(encoding="utf-8", errors="replace")
+                if stdout_log_path.is_file()
+                else ""
+            )
+            history_log_path.write_text(content, encoding="utf-8")
+        except OSError:
+            pass
+
 
 # ---------------------------------------------------------------------------
 # Work Steward — orchestrates concurrent trial execution
@@ -442,7 +505,13 @@ class TrialRunner:
 
 # @sdlc EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-010, RULE-012
 class WorkSteward:
-    """Schedules trial tasks with a concurrency semaphore."""
+    """Schedules trial tasks with a concurrency semaphore.
+
+    Resolves the experiment's ``CliAdapter`` exactly once, in
+    ``__init__`` — before ``run_all`` schedules any cell — so a bad
+    ``cli_template`` fails fast (REQ-038) and every ``TrialRunner`` it
+    creates shares the same adapter instance (REQ-035).
+    """
 
     def __init__(
         self,
@@ -450,6 +519,7 @@ class WorkSteward:
         test_cases: list[TestCase],
         output_dir: Path,
         resume_mgr: ResumeManager,
+        cli_adapter: CliAdapter | None = None,
     ) -> None:
         """Initialize the work steward.
 
@@ -459,15 +529,28 @@ class WorkSteward:
             test_cases: Loaded test cases.
             output_dir: Root output directory.
             resume_mgr: Resume manager for persisting results.
+            cli_adapter: The resolved ``CliAdapter`` shared by every trial.
+                When omitted, it is resolved from ``config.cli_template``.
+
+        Raises:
+        ------
+            ValueError: If ``cli_adapter`` is omitted and ``config.cli_template``
+                cannot be resolved (REQ-038).
 
         """
         self._config = config
         self._test_cases = test_cases
         self._output_dir = output_dir
         self._resume_mgr = resume_mgr
+        # @sdlc EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-038: resolved once,
+        # before any cell is scheduled.
+        self._cli_adapter = (
+            cli_adapter if cli_adapter is not None else resolve_cli_adapter(config.cli_template)
+        )
         self._semaphore = asyncio.Semaphore(config.parallelism)
 
-    # @sdlc EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-006, EXPERIMENT-RUNNER:REQ-010
+    # @sdlc EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-006,
+    # @sdlc EXPERIMENT-RUNNER:REQ-010
     async def run_all(self) -> list[TrialResult]:
         """Run all cells in the experiment grid.
 
@@ -509,7 +592,9 @@ class WorkSteward:
                     cell.model, cell.test_case, cell.trial_index,
                 )
                 test_case = case_map[cell.test_case]
-                runner = TrialRunner(self._config, test_case, self._output_dir)
+                runner = TrialRunner(
+                    self._config, test_case, self._output_dir, self._cli_adapter,
+                )
                 result = await runner.run(cell.model, cell.trial_index)
                 # @sdlc EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-017
                 self._resume_mgr.append(result)
@@ -560,7 +645,8 @@ def _extract_verification_marker(stdout: str) -> Literal["EXCELLENT", "PASS", "F
     return None
 
 
-# @sdlc EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-006
+# @sdlc EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-006,
+# @sdlc EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-038
 async def run_experiment(
     config: ExperimentConfig,
     test_cases: list[TestCase],
@@ -573,6 +659,11 @@ async def run_experiment(
     ``id`` and ``started_at`` are preserved so a single experiment can be
     rerun without losing its identity.
 
+    ``config.cli_template`` is resolved to a ``CliAdapter`` once, inside
+    ``WorkSteward.__init__`` below, before any cell is scheduled — an
+    unresolvable template raises ``ValueError`` here, before any trial
+    begins (REQ-038).
+
     Args:
     ----
         config: Experiment configuration.
@@ -582,6 +673,11 @@ async def run_experiment(
     Returns:
     -------
         The completed ``Experiment`` envelope.
+
+    Raises:
+    ------
+        ValueError: If ``config.cli_template`` cannot be resolved to a valid
+            ``CliAdapter`` (REQ-038).
 
     """
     output_dir.mkdir(parents=True, exist_ok=True)

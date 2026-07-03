@@ -1,12 +1,18 @@
-# COVERS: EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-006, EXPERIMENT-RUNNER:REQ-007, EXPERIMENT-RUNNER:REQ-008, EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-010,
-# COVERS: EXPERIMENT-RUNNER:REQ-011, EXPERIMENT-RUNNER:REQ-012, EXPERIMENT-RUNNER:REQ-013, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-018, EXPERIMENT-RUNNER:REQ-019,
-# COVERS: EXPERIMENT-RUNNER:NFR-001, EXPERIMENT-RUNNER:NFR-002, EXPERIMENT-RUNNER:UT-001..025, EXPERIMENT-RUNNER:IT-001..004
+# COVERS: EXPERIMENT-RUNNER:REQ-002, EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-005,
+# COVERS: EXPERIMENT-RUNNER:REQ-006, EXPERIMENT-RUNNER:REQ-007, EXPERIMENT-RUNNER:REQ-008,
+# COVERS: EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-010,
+# COVERS: EXPERIMENT-RUNNER:REQ-011, EXPERIMENT-RUNNER:REQ-012, EXPERIMENT-RUNNER:REQ-013,
+# COVERS: EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-018,
+# COVERS: EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:REQ-037,
+# COVERS: EXPERIMENT-RUNNER:NFR-001, EXPERIMENT-RUNNER:NFR-002, EXPERIMENT-RUNNER:UT-001..025,
+# COVERS: EXPERIMENT-RUNNER:UT-062, EXPERIMENT-RUNNER:IT-001..004
 
 """Shared fixtures for experiment-runner tests."""
 
 from __future__ import annotations
 
 import asyncio
+import sys
 from pathlib import Path
 
 import pytest
@@ -18,6 +24,17 @@ from zrb_llm_evaluator.models import (
     ValidationCheck,
     ValidationResult,
 )
+
+# @sdlc EXPERIMENT-RUNNER:REQ-037
+# Ensure the repo root is importable as "tests.fixtures...." — pytest's
+# rootdir-based import mode inserts this directory's own parent
+# (tests/experiment-runner's grandparent) inconsistently depending on how
+# tests are invoked, so `tests.fixtures.custom_adapter` (used by
+# UT-062-style dotted-path CliAdapter tests) isn't reliably importable
+# without this. Idempotent: only inserted once, and only if missing.
+_REPO_ROOT = str(Path(__file__).resolve().parents[2])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 # ---------------------------------------------------------------------------
 # Fixtures: Pydantic model factories

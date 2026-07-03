@@ -1,5 +1,6 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-013, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-024, EXPERIMENT-RUNNER:REQ-034, RULE-001, RULE-004
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-013, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-024,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-034, RULE-001, RULE-004
 
 """Test case discovery, loading, and validation."""
 
@@ -22,9 +23,9 @@ class TestCase(BaseModel):
     ``workdir`` is the path the runner stages into the trial's nested
     workdir. It always points to ``{test_case_dir}/workdir`` — whether or
     not that directory exists. When it doesn't exist, the runner stages
-    nothing and the LLM sees an empty workdir (per EXPERIMENT-RUNNER:REQ-022 / EXPERIMENT-RUNNER:REQ-024,
-    test-case metadata like ``validator.py`` and ``instruction.txt`` must
-    never reach the subprocess cwd).
+    nothing and the LLM sees an empty workdir (per EXPERIMENT-RUNNER:REQ-022 /
+    EXPERIMENT-RUNNER:REQ-024, test-case metadata like ``validator.py`` and
+    ``instruction.txt`` must never reach the subprocess cwd).
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)

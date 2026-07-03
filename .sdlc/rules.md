@@ -46,14 +46,15 @@
 | Enforcement | Review; the framework must reject a validator that doesn't implement the protocol |
 | Added | 2026-05-18 |
 
-### RULE-005 — Invoke zrb via Subprocess
+### RULE-005 — Invoke the Target CLI via Subprocess
 | Field | Value |
 |-------|-------|
 | Category | Required Patterns |
-| Statement | The experiment runner MUST invoke `zrb chat ...` as a subprocess. It MUST NOT import or call zrb's internal Python APIs. |
-| Rationale | Tests the actual CLI the user runs; works with white-labeled zrb forks that may have different Python internals. |
-| Enforcement | Review; no import of `zrb` internals in the runner module |
+| Statement | The experiment runner MUST invoke the configured CLI under test (zrb, Claude Code, opencode, or a custom `CliAdapter` template) as a subprocess, via that CLI's `CliAdapter`. It MUST NOT import or call the target CLI's internal Python APIs directly. |
+| Rationale | Tests the actual CLI the user runs, regardless of which agent framework it wraps; works with white-labeled zrb forks and alternative agent CLIs that may have entirely different Python internals (or none at all). |
+| Enforcement | Review; no import of a target CLI's internals in the runner module or in any `CliAdapter` implementation |
 | Added | 2026-05-18 |
+| Amended | 2026-07-03 — generalized from zrb-only to any `CliAdapter`-backed CLI (see Override Log) |
 
 ### RULE-006 — Poetry for Packaging
 | Field | Value |
@@ -130,4 +131,4 @@
 
 | Date | Rule | Scope (PR / commit) | Approver | Reason |
 |------|------|---------------------|----------|--------|
-|      |      |                     |          |        |
+| 2026-07-03 | RULE-005 | `cli-templates` feature (experiment-runner spec REQ-035–042) | Go Frendi | Generalize the runner from a zrb-only subprocess call to a pluggable `CliAdapter`, so the evaluator can also benchmark Claude Code, opencode, and custom agent CLIs. |
