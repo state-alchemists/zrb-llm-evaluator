@@ -28,17 +28,26 @@ app = typer.Typer(
 
 
 def _get_cli_version(cli_name: str) -> str:
-    """Return the version string for ``cli_name``, or '' on failure."""
-    try:
-        result = subprocess.run(
-            [cli_name, "version"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return (result.stdout.strip() or result.stderr.strip())
-    except Exception:
-        return ""
+    """Return the version string for ``cli_name``, or '' on failure.
+
+    Tries the conventional ``--version`` flag first, then zrb's ``version``
+    subcommand, accepting the first invocation that exits 0 with output.
+    """
+    for version_args in (["--version"], ["version"]):
+        try:
+            result = subprocess.run(
+                [cli_name, *version_args],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except Exception:
+            return ""
+        if result.returncode == 0:
+            output = result.stdout.strip() or result.stderr.strip()
+            if output:
+                return output
+    return ""
 
 
 def _setup_logging() -> None:
@@ -73,7 +82,14 @@ def run(
         4, "--parallelism", help="Max concurrent subprocesses",
     ),
     timeout: int = typer.Option(300, "--timeout", help="Per-trial timeout in seconds"),
-    cli_name: str = typer.Option("zrb", "--cli-name", help="CLI binary name"),
+    cli_name: str = typer.Option(
+        "",
+        "--cli-name",
+        help=(
+            "CLI binary name (default: the selected --cli-template's own "
+            "binary, e.g. 'zrb', 'claude', 'opencode')"
+        ),
+    ),
     env_prefix: str = typer.Option(
         "ZRB", "--env-prefix", help="Env var prefix (default ZRB → ZRB_LLM_*)",
     ),
@@ -104,6 +120,20 @@ def run(
     model_list = [m.strip() for m in models.split(",") if m.strip()]
     case_paths = [Path(p.strip()) for p in test_cases.split(",") if p.strip()]
 
+    # @sdlc EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-038: resolve the CliAdapter
+    # before any trial begins so a bad --cli-template fails fast with a
+    # clear error (INVALID_TEMPLATE), same pattern as invalid test cases
+    # below. The resolved instance is reused for the whole experiment (a
+    # custom adapter is constructed exactly once) and supplies the default
+    # binary name when --cli-name isn't given.
+    try:
+        cli_adapter = resolve_cli_adapter(cli_template)
+    except ValueError as exc:
+        typer.echo(f"CLI template error: {exc}", err=True)
+        raise typer.Exit(code=1)
+    if not cli_name:
+        cli_name = getattr(cli_adapter, "default_cli_name", "zrb")
+
     # Validate & build config
     cli_ver = _get_cli_version(cli_name)
     try:
@@ -121,15 +151,6 @@ def run(
         )
     except Exception as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
-        raise typer.Exit(code=1)
-
-    # @sdlc EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-038: resolve the CliAdapter
-    # before any trial begins so a bad --cli-template fails fast with a
-    # clear error (INVALID_TEMPLATE), same pattern as invalid test cases below.
-    try:
-        resolve_cli_adapter(config.cli_template)
-    except ValueError as exc:
-        typer.echo(f"CLI template error: {exc}", err=True)
         raise typer.Exit(code=1)
 
     # Load test cases (validates validator protocol at load time)
@@ -150,7 +171,9 @@ def run(
     # Run
     import asyncio
 
-    experiment = asyncio.run(run_experiment(config, loaded_cases, out_path))
+    experiment = asyncio.run(
+        run_experiment(config, loaded_cases, out_path, cli_adapter),
+    )
 
     # Generate reports
     experiment_path = out_path / "experiment.json"

@@ -65,6 +65,11 @@ class CliAdapter(Protocol):
     implementations: ``ZrbCliAdapter`` (default), ``ClaudeCodeCliAdapter``,
     ``OpencodeCliAdapter``. Users may supply a custom implementation via a
     dotted import path on ``ExperimentConfig.cli_template``.
+
+    Implementations may additionally expose a ``default_cli_name`` class
+    attribute (deliberately not part of this protocol, so existing custom
+    adapters remain valid): the binary name the CLI layer falls back to
+    when ``--cli-name`` isn't given. Without it, the fallback is ``"zrb"``.
     """
 
     def build_argv(

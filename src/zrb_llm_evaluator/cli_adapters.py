@@ -14,30 +14,38 @@ each supported template, entirely behind the ``CliAdapter`` protocol
 Built-in templates:
     * ``zrb`` (default) — preserves the exact pre-existing ``zrb chat``
       invocation, env vars, and 💸-line parsing (REQ-012 / REQ-016 / REQ-019).
-    * ``claude-code`` — invokes Claude Code's documented non-interactive
-      "print" mode with structured JSON output (``-p ... --output-format
-      json``) and parses token usage from the JSON's ``usage`` block.
-    * ``opencode`` — invokes opencode's non-interactive ``run`` mode.
-      **The exact flags and usage-reporting format are not verified against
-      a real opencode installation** (see spec.md's "CLI Templates"
-      section) — this is a best-effort implementation that should be
-      validated (and adjusted if needed) against a real opencode build.
+    * ``claude-code`` — invokes Claude Code's non-interactive "print" mode
+      with streamed JSON output (``-p ... --output-format stream-json``);
+      usage comes from the final ``result`` event, tool calls from the
+      assistant messages' ``tool_use`` content blocks.
+    * ``opencode`` — invokes opencode's non-interactive ``run`` mode with
+      ``--format json`` (NDJSON events), verified against the opencode
+      source (``packages/opencode/src/cli/cmd/run.ts``): usage comes from
+      ``step_finish`` events, tool calls from ``tool_use`` events.
 
 Anything else is treated as a dotted Python import path to a custom
 ``CliAdapter`` implementation (REQ-037), resolved by ``resolve_cli_adapter``.
+The module must be importable (installed or on ``PYTHONPATH``) — the
+current working directory is not automatically searched.
+
+Each built-in adapter also carries a ``default_cli_name`` class attribute:
+the binary name the CLI layer uses when ``--cli-name`` isn't given, so
+``--cli-template claude-code`` doesn't silently invoke ``zrb -p ...``.
 """
 
 from __future__ import annotations
 
 import importlib
 import json
-import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from zrb_llm_evaluator.cost_parser import count_tool_calls_from_history, parse_cost_summary
 from zrb_llm_evaluator.models import UsageSummary
 from zrb_llm_evaluator.protocols import CliAdapter
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 # @sdlc EXPERIMENT-RUNNER:REQ-036
@@ -49,6 +57,8 @@ class ZrbCliAdapter:
     parsing previously hardcoded in ``TrialRunner`` (REQ-012, REQ-016,
     REQ-019) with no behavior change.
     """
+
+    default_cli_name = "zrb"
 
     def build_argv(
         self, cli_name: str, model: str, instruction: str, session_name: str,
@@ -96,63 +106,73 @@ class ZrbCliAdapter:
         return count_tool_calls_from_history(history_log_path)
 
 
-def _last_json_object(text: str) -> dict[str, Any] | None:
-    """Best-effort extraction of the last top-level JSON object in ``text``.
+def _iter_json_objects(text: str) -> Iterator[dict[str, Any]]:
+    """Yield every top-level JSON object embedded in ``text``, in order.
 
-    Tries a straight ``json.loads`` first (the common case where stdout is
-    exactly one JSON document); falls back to scanning backwards for a
-    ``{`` that starts a parseable object, tolerating incidental log noise
-    before/after the JSON payload.
+    Scans forward with ``raw_decode`` so noise before, between, or after
+    the JSON payloads is skipped (the runner merges stderr into the same
+    stream, so stray log lines around the payload are expected). Nested
+    objects are not yielded separately — the scan jumps past each decoded
+    document.
     """
-    stripped = text.strip()
-    if not stripped:
-        return None
-    try:
-        parsed = json.loads(stripped)
-    except (json.JSONDecodeError, ValueError):
-        parsed = None
-    else:
-        return parsed if isinstance(parsed, dict) else None
-
-    start = stripped.rfind("{")
-    while start != -1:
-        candidate = stripped[start:]
+    decoder = json.JSONDecoder()
+    idx = text.find("{")
+    while idx != -1:
         try:
-            parsed = json.loads(candidate)
-        except (json.JSONDecodeError, ValueError):
-            start = stripped.rfind("{", 0, start)
+            obj, end = decoder.raw_decode(text, idx)
+        except ValueError:
+            idx = text.find("{", idx + 1)
             continue
-        return parsed if isinstance(parsed, dict) else None
-    return None
+        if isinstance(obj, dict):
+            yield obj
+        idx = text.find("{", max(end, idx + 1))
+
+
+def _last_json_object(text: str) -> dict[str, Any] | None:
+    """Return the last top-level JSON object in ``text``, or ``None``."""
+    last: dict[str, Any] | None = None
+    for obj in _iter_json_objects(text):
+        last = obj
+    return last
 
 
 # @sdlc EXPERIMENT-RUNNER:REQ-041
 class ClaudeCodeCliAdapter:
     """``CliAdapter`` for Claude Code's non-interactive "print" mode.
 
-    Invokes ``claude -p <instruction> --output-format json --model
-    <model>``, per Claude Code's documented non-interactive/print mode, and
-    parses token usage from the JSON payload's ``usage`` block. Claude Code
-    manages its own session/history internally (no equivalent of zrb's
-    ``{prefix}_LLM_HISTORY_DIR`` env var), so ``build_env`` passes the base
-    environment through unchanged; the runner itself snapshots the captured
-    stdout to ``history_log_path`` so partial history still survives a
-    timeout (REQ-040), and that same JSON snapshot is what
+    Invokes ``claude -p <instruction> --output-format stream-json --verbose
+    --model <model> --dangerously-skip-permissions``. Stream mode (rather
+    than plain ``--output-format json``) is what makes tool calls
+    observable: the plain JSON result object carries only ``usage``, while
+    the stream emits one JSON object per line including assistant messages
+    whose ``content`` arrays contain ``tool_use`` blocks. The skip-
+    permissions flag is the counterpart of zrb's ``--yolo true`` — without
+    it, print mode denies every tool request and no agentic test case can
+    pass. Claude Code manages its own session/history internally (no
+    equivalent of zrb's ``{prefix}_LLM_HISTORY_DIR`` env var), so
+    ``build_env`` passes the base environment through unchanged; the runner
+    snapshots the captured stdout (the full event stream) to
+    ``history_log_path`` (REQ-040), and that snapshot is what
     ``extract_tool_calls`` reads back.
     """
+
+    default_cli_name = "claude"
 
     def build_argv(
         self, cli_name: str, model: str, instruction: str, session_name: str,
     ) -> list[str]:
-        """Build the ``{cli_name} -p ... --output-format json ...`` argv."""
+        """Build the ``{cli_name} -p ... --output-format stream-json ...`` argv."""
         return [
             cli_name,
             "-p",
             instruction,
             "--output-format",
-            "json",
+            "stream-json",
+            # stream-json in print mode requires --verbose.
+            "--verbose",
             "--model",
             model,
+            "--dangerously-skip-permissions",
         ]
 
     def build_env(
@@ -170,38 +190,59 @@ class ClaudeCodeCliAdapter:
         return history_dir / f"{session_name}.json"
 
     def parse_usage(self, stdout: str) -> UsageSummary:
-        """Parse token usage from Claude Code's JSON ``usage`` block."""
-        data = _last_json_object(stdout)
-        usage = data.get("usage") if isinstance(data, dict) else None
-        if not isinstance(usage, dict):
+        """Parse token usage from the final ``result`` event's ``usage`` block.
+
+        The last top-level object carrying a ``usage`` dict wins — in
+        stream mode that is the terminal ``result`` event (cumulative
+        usage); with plain ``--output-format json`` output it is the single
+        result object, so both shapes parse.
+        """
+        usage: dict[str, Any] | None = None
+        for obj in _iter_json_objects(stdout):
+            candidate = obj.get("usage")
+            if isinstance(candidate, dict):
+                usage = candidate
+        if usage is None:
             return UsageSummary()
         input_tokens = int(usage.get("input_tokens", 0) or 0)
         output_tokens = int(usage.get("output_tokens", 0) or 0)
         cache_read_tokens = int(usage.get("cache_read_input_tokens", 0) or 0)
+        cache_write_tokens = int(usage.get("cache_creation_input_tokens", 0) or 0)
         return UsageSummary(
-            total_tokens=input_tokens + output_tokens + cache_read_tokens,
+            total_tokens=(
+                input_tokens + output_tokens + cache_read_tokens + cache_write_tokens
+            ),
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cache_read_tokens=cache_read_tokens,
         )
 
     def extract_tool_calls(self, history_log_path: Path) -> tuple[list[str], int]:
-        """Extract tool-call names from a ``tool_uses`` array, if present."""
+        """Extract tool names from ``tool_use`` blocks in the event stream.
+
+        Reads the stdout snapshot at ``history_log_path`` and collects
+        every assistant message content item with ``type == "tool_use"``.
+        Empty on any failure (missing file, no parseable events).
+        """
         if not history_log_path.is_file():
             return [], 0
         try:
-            data: Any = json.loads(history_log_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError, ValueError):
+            text = history_log_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
             return [], 0
         names: list[str] = []
-        if isinstance(data, dict):
-            tool_uses = data.get("tool_uses")
-            if isinstance(tool_uses, list):
-                for item in tool_uses:
-                    if isinstance(item, dict):
-                        name = item.get("name")
-                        if isinstance(name, str) and name:
-                            names.append(name)
+        for obj in _iter_json_objects(text):
+            message = obj.get("message")
+            if not isinstance(message, dict):
+                continue
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "tool_use":
+                    name = item.get("name")
+                    if isinstance(name, str) and name:
+                        names.append(name)
         return names, len(names)
 
 
@@ -209,41 +250,44 @@ class ClaudeCodeCliAdapter:
 class OpencodeCliAdapter:
     """``CliAdapter`` for opencode's non-interactive ``run`` mode.
 
-    .. warning::
-        opencode's exact CLI flags and usage-reporting format are **not
-        verified against a real opencode installation** — this is a
-        best-effort implementation per spec.md's "CLI Templates" section.
-        Confirm ``build_argv``/``parse_usage`` against a real opencode
-        build and adjust if they differ; that's a normal code change, not
-        a spec/requirement change (REQ-042 only commits to "non-interactive
-        invocation + structured usage parsing").
+    Verified against the opencode source
+    (``packages/opencode/src/cli/cmd/run.ts`` and the SDK event types):
 
-    Assumes a plain-text usage summary of the form
-    ``Tokens: <input> in / <output> out / <cache> cached / <total>
-    total`` may appear in stdout; absent that, usage defaults to zero
-    (matching REQ-039's "default when the adapter cannot determine a
-    value" semantics). Tool-call extraction best-effort reuses the zrb
-    history JSON shape, since opencode's own history format is unverified.
+    * ``opencode run <message> --model <provider/model> --format json``
+      emits NDJSON events (one JSON object per line): ``tool_use`` events
+      carry the tool name at ``part.tool``; ``step_finish`` events carry
+      per-step token counts at ``part.tokens`` (``input``, ``output``,
+      ``reasoning``, ``cache.read``, ``cache.write``).
+    * ``--model`` expects ``provider/model``, so the evaluator's
+      ``provider:name`` ids are translated by replacing the first ``:``.
+    * ``--session`` continues an *existing* session id and exits non-zero
+      for an unknown one, so it is not passed; ``--title`` labels the
+      fresh session with the trial's session name instead.
+    * ``--dangerously-skip-permissions`` is the counterpart of zrb's
+      ``--yolo true``.
+
+    opencode stores history in its XDG data dir, so the runner's stdout
+    snapshot (the full NDJSON event stream) serves as the history file
+    (REQ-040) and is what ``extract_tool_calls`` reads back.
     """
 
-    _USAGE_PATTERN = re.compile(
-        r"Tokens:\s*(?P<input>\d+)\s*in\s*/\s*(?P<output>\d+)\s*out\s*/\s*"
-        r"(?P<cache>\d+)\s*cached\s*/\s*(?P<total>\d+)\s*total",
-        re.IGNORECASE,
-    )
+    default_cli_name = "opencode"
 
     def build_argv(
         self, cli_name: str, model: str, instruction: str, session_name: str,
     ) -> list[str]:
-        """Build the ``{cli_name} run <instruction> --model <model> ...`` argv."""
+        """Build the ``{cli_name} run <instruction> --format json ...`` argv."""
         return [
             cli_name,
             "run",
             instruction,
             "--model",
-            model,
-            "--session",
+            model.replace(":", "/", 1),
+            "--format",
+            "json",
+            "--title",
             session_name,
+            "--dangerously-skip-permissions",
         ]
 
     def build_env(
@@ -261,20 +305,57 @@ class OpencodeCliAdapter:
         return history_dir / f"{session_name}.json"
 
     def parse_usage(self, stdout: str) -> UsageSummary:
-        """Best-effort parse of an opencode usage summary line."""
-        match = self._USAGE_PATTERN.search(stdout)
-        if not match:
-            return UsageSummary()
+        """Sum per-step token counts across all ``step_finish`` events."""
+        input_tokens = 0
+        output_tokens = 0
+        cache_read_tokens = 0
+        total_tokens = 0
+        for obj in _iter_json_objects(stdout):
+            if obj.get("type") != "step_finish":
+                continue
+            part = obj.get("part")
+            if not isinstance(part, dict):
+                continue
+            tokens = part.get("tokens")
+            if not isinstance(tokens, dict):
+                continue
+            step_input = int(tokens.get("input", 0) or 0)
+            step_output = int(tokens.get("output", 0) or 0)
+            step_reasoning = int(tokens.get("reasoning", 0) or 0)
+            cache = tokens.get("cache")
+            cache_read = int(cache.get("read", 0) or 0) if isinstance(cache, dict) else 0
+            cache_write = int(cache.get("write", 0) or 0) if isinstance(cache, dict) else 0
+            input_tokens += step_input
+            output_tokens += step_output
+            cache_read_tokens += cache_read
+            total_tokens += (
+                step_input + step_output + step_reasoning + cache_read + cache_write
+            )
         return UsageSummary(
-            total_tokens=int(match.group("total")),
-            input_tokens=int(match.group("input")),
-            output_tokens=int(match.group("output")),
-            cache_read_tokens=int(match.group("cache")),
+            total_tokens=total_tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_read_tokens=cache_read_tokens,
         )
 
     def extract_tool_calls(self, history_log_path: Path) -> tuple[list[str], int]:
-        """Best-effort tool-call extraction, reusing the zrb history JSON parser."""
-        return count_tool_calls_from_history(history_log_path)
+        """Extract tool names from ``tool_use`` events in the NDJSON snapshot."""
+        if not history_log_path.is_file():
+            return [], 0
+        try:
+            text = history_log_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return [], 0
+        names: list[str] = []
+        for obj in _iter_json_objects(text):
+            if obj.get("type") != "tool_use":
+                continue
+            part = obj.get("part")
+            if isinstance(part, dict):
+                name = part.get("tool")
+                if isinstance(name, str) and name:
+                    names.append(name)
+        return names, len(names)
 
 
 _BUILTIN_ADAPTERS: dict[str, type[CliAdapter]] = {
@@ -332,7 +413,10 @@ def resolve_cli_adapter(cli_template: str) -> CliAdapter:
         module_path, _, class_name = cli_template.rpartition(".")
         try:
             module = importlib.import_module(module_path)
-        except ImportError as exc:
+        # Not just ImportError: a custom module can raise anything at import
+        # time (SyntaxError, RuntimeError, ...) and it must still surface as
+        # the CLI's clean "CLI template error" path rather than a traceback.
+        except Exception as exc:
             msg = (
                 f"Cannot import module {module_path!r} for cli_template "
                 f"{cli_template!r}: {exc}"
@@ -355,11 +439,10 @@ def resolve_cli_adapter(cli_template: str) -> CliAdapter:
     missing = [
         name for name in _REQUIRED_METHODS if not callable(getattr(instance, name, None))
     ]
-    if missing or not isinstance(instance, CliAdapter):
+    if missing:
         msg = (
             f"cli_template {cli_template!r} resolves to {cls!r}, which does not "
             f"implement the CliAdapter protocol (missing methods: {missing})"
         )
         raise ValueError(msg)
-    # The isinstance check above narrows `instance` to CliAdapter for mypy.
-    return instance
+    return cast("CliAdapter", instance)

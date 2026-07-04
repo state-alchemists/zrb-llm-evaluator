@@ -165,8 +165,8 @@ Determinism: given the same `results.json`, repeated runs of `MarkdownReporter` 
 | Template | `build_argv` (illustrative) | Usage source | Status |
 |----------|------------------------------|--------------|--------|
 | `zrb` (default) | `{cli_name} chat --interactive false --yolo true --model {model} --message {instruction} --session {session_name}` | `💸` stdout summary line | Existing behavior (REQ-012/016/019), unchanged |
-| `claude-code` | `{cli_name} -p {instruction} --output-format json --model {model} ...` | `usage` block in the CLI's JSON stdout | New; non-interactive/print flags assumed from Claude Code's documented `-p`/`--output-format json` mode |
-| `opencode` | `{cli_name} run {instruction} --model {model} ...` | opencode's own usage/summary output | New; exact flags **not yet verified against an installed opencode build** — confirm during implementation and adjust `OpencodeCliAdapter.build_argv`/`parse_usage` if the real CLI differs |
+| `claude-code` | `{cli_name} -p {instruction} --output-format stream-json --verbose --model {model} --dangerously-skip-permissions` | `usage` block of the final `result` event in the stream-json stdout; tool calls from assistant `tool_use` content blocks | New; stream-json (not plain json) is what makes tool calls observable; skip-permissions is the counterpart of zrb's `--yolo true` |
+| `opencode` | `{cli_name} run {instruction} --model {provider/model} --format json --title {session_name} --dangerously-skip-permissions` | summed `step_finish` events in the `--format json` NDJSON stdout; tool calls from `tool_use` events | New; verified against the opencode source (`packages/opencode/src/cli/cmd/run.ts`): `--model` wants `provider/model`, and `--session` only continues an existing session id, so the trial name goes in `--title` |
 | custom | user-defined | user-defined | Loaded via dotted import path (REQ-037) |
 
 The `claude-code` and `opencode` rows are implementation guidance, not literal contracts — REQ-041/REQ-042 only commit to "non-interactive invocation + structured usage parsing," so a flag-name correction to either adapter is a normal code change, not a spec/requirement change.

@@ -298,6 +298,11 @@ class TestInvalidCliTemplateRejected:
         with pytest.raises(ValueError, match="Cannot import module"):
             resolve_cli_adapter("tests.fixtures.does_not_exist.Whatever")
 
+    def test_dotted_path_module_raising_at_import_rejected(self) -> None:
+        """A module raising a non-ImportError at import time still yields ValueError."""
+        with pytest.raises(ValueError, match="Cannot import module"):
+            resolve_cli_adapter("tests.fixtures.broken_adapter.Whatever")
+
     def test_dotted_path_bad_class_name_rejected(self) -> None:
         """An importable module missing the named class is rejected with a clear error."""
         with pytest.raises(ValueError, match="has no attribute"):
@@ -403,7 +408,13 @@ class TestClaudeCodeAdapter:
         assert argv[0] == "claude"
         assert "-p" in argv
         assert "--output-format" in argv
-        assert "json" in argv
+        # stream-json (not plain json): tool calls are only observable in
+        # the event stream, and stream-json in print mode needs --verbose.
+        assert "stream-json" in argv
+        assert "--verbose" in argv
+        # Counterpart of zrb's --yolo true; without it print mode denies
+        # every tool request.
+        assert "--dangerously-skip-permissions" in argv
         assert "do the thing" in argv
         assert "anthropic:claude-3-5-sonnet" in argv
 
@@ -436,14 +447,57 @@ class TestClaudeCodeAdapter:
         assert usage.output_tokens == 0
         assert usage.cache_read_tokens == 0
 
+    def test_claude_code_parses_usage_despite_surrounding_noise(self) -> None:
+        """Noise before AND after the JSON payload is tolerated.
+
+        The runner merges stderr into the captured stream, so log lines can
+        trail the payload; regression test for the parser requiring the
+        JSON to end the stream.
+        """
+        adapter = ClaudeCodeCliAdapter()
+        payload = json.dumps({
+            "type": "result",
+            "usage": {
+                "input_tokens": 120,
+                "output_tokens": 80,
+                "cache_read_input_tokens": 10,
+                "cache_creation_input_tokens": 5,
+            },
+        })
+        stdout = f"some startup log line\n{payload}\nWARNING: stderr line at exit\n"
+        usage = adapter.parse_usage(stdout)
+        assert usage.input_tokens == 120
+        assert usage.output_tokens == 80
+        assert usage.cache_read_tokens == 10
+        # cache_creation counts toward the total.
+        assert usage.total_tokens == 215
+
     def test_claude_code_extracts_tool_uses(self, tmp_path: Path) -> None:
-        """tool_uses array in the JSON snapshot is parsed into tool names."""
+        """tool_use content blocks in the stream-json snapshot become tool names."""
         adapter = ClaudeCodeCliAdapter()
         history_path = tmp_path / "sess.json"
-        history_path.write_text(
-            json.dumps({"tool_uses": [{"name": "Read"}, {"name": "Edit"}]}),
-            encoding="utf-8",
-        )
+        stream = "\n".join([
+            json.dumps({"type": "system", "subtype": "init"}),
+            json.dumps({
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": "on it"},
+                        {"type": "tool_use", "name": "Read", "input": {}},
+                    ],
+                },
+            }),
+            json.dumps({
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "tool_use", "name": "Edit", "input": {}}],
+                },
+            }),
+            json.dumps({"type": "result", "usage": {"input_tokens": 1}}),
+        ])
+        history_path.write_text(stream, encoding="utf-8")
         names, count = adapter.extract_tool_calls(history_path)
         assert names == ["Read", "Edit"]
         assert count == 2
@@ -456,6 +510,31 @@ class TestClaudeCodeAdapter:
         assert count == 0
 
 
+def _opencode_step_finish(
+    input_tokens: int,
+    output_tokens: int,
+    reasoning: int = 0,
+    cache_read: int = 0,
+    cache_write: int = 0,
+) -> str:
+    """Build one opencode ``step_finish`` NDJSON event line."""
+    return json.dumps({
+        "type": "step_finish",
+        "sessionID": "ses_1",
+        "part": {
+            "type": "step-finish",
+            "reason": "stop",
+            "cost": 0,
+            "tokens": {
+                "input": input_tokens,
+                "output": output_tokens,
+                "reasoning": reasoning,
+                "cache": {"read": cache_read, "write": cache_write},
+            },
+        },
+    })
+
+
 class TestOpencodeAdapter:
     """OpencodeCliAdapter unit tests — @sdlc EXPERIMENT-RUNNER:REQ-042."""
 
@@ -466,17 +545,31 @@ class TestOpencodeAdapter:
         assert argv[0] == "opencode"
         assert argv[1] == "run"
         assert "write a poem" in argv
-        assert "openai:gpt-4o" in argv
+        # opencode's --model expects provider/model, not provider:name.
+        assert "openai/gpt-4o" in argv
+        assert "--format" in argv
+        assert "json" in argv
+        # --session continues an EXISTING session id (exits 1 for a fresh
+        # one), so the trial's session name goes in --title instead.
+        assert "--session" not in argv
+        assert "--title" in argv
+        assert "sess-1" in argv
+        assert "--dangerously-skip-permissions" in argv
 
-    def test_opencode_parses_usage_from_output(self) -> None:
-        """EXPERIMENT-RUNNER:UT-072: UsageSummary populated from a best-effort text summary."""
+    def test_opencode_parses_usage_from_step_finish_events(self) -> None:
+        """EXPERIMENT-RUNNER:UT-072: UsageSummary sums step_finish token counts."""
         adapter = OpencodeCliAdapter()
-        stdout = "Some output...\nTokens: 40 in / 20 out / 5 cached / 65 total\n"
+        stdout = "\n".join([
+            json.dumps({"type": "text", "part": {"type": "text", "text": "hi"}}),
+            _opencode_step_finish(30, 15, cache_read=5),
+            _opencode_step_finish(10, 5, reasoning=2, cache_write=3),
+        ])
         usage = adapter.parse_usage(stdout)
         assert usage.input_tokens == 40
         assert usage.output_tokens == 20
         assert usage.cache_read_tokens == 5
-        assert usage.total_tokens == 65
+        # total includes reasoning and cache-write tokens too.
+        assert usage.total_tokens == 70
 
     def test_opencode_parses_usage_missing_defaults_zero(self) -> None:
         """No recognizable usage summary in stdout -> UsageSummary defaults to zero."""
@@ -486,6 +579,28 @@ class TestOpencodeAdapter:
         assert usage.input_tokens == 0
         assert usage.output_tokens == 0
         assert usage.cache_read_tokens == 0
+
+    def test_opencode_extracts_tool_calls_from_tool_use_events(
+        self, tmp_path: Path,
+    ) -> None:
+        """tool_use events in the NDJSON snapshot become tool names."""
+        adapter = OpencodeCliAdapter()
+        history_path = tmp_path / "sess.json"
+        stream = "\n".join([
+            json.dumps({
+                "type": "tool_use",
+                "part": {"type": "tool", "tool": "read", "state": {"status": "completed"}},
+            }),
+            _opencode_step_finish(10, 5),
+            json.dumps({
+                "type": "tool_use",
+                "part": {"type": "tool", "tool": "edit", "state": {"status": "completed"}},
+            }),
+        ])
+        history_path.write_text(stream, encoding="utf-8")
+        names, count = adapter.extract_tool_calls(history_path)
+        assert names == ["read", "edit"]
+        assert count == 2
 
 
 class TestHistorySnapshotFallback:
@@ -509,11 +624,26 @@ class TestHistorySnapshotFallback:
             cli_template="claude-code",
         )
         output_dir = tmp_path / "out"
-        payload = json.dumps({
-            "type": "result",
-            "usage": {"input_tokens": 10, "output_tokens": 5, "cache_read_input_tokens": 0},
-            "tool_uses": [{"name": "Read"}, {"name": "Edit"}],
-        }).encode("utf-8")
+        payload = "\n".join([
+            json.dumps({
+                "type": "assistant",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "tool_use", "name": "Read", "input": {}},
+                        {"type": "tool_use", "name": "Edit", "input": {}},
+                    ],
+                },
+            }),
+            json.dumps({
+                "type": "result",
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 5,
+                    "cache_read_input_tokens": 0,
+                },
+            }),
+        ]).encode("utf-8")
 
         async def writing_create(*args: object, **kwargs: object) -> AsyncMock:
             log_file = kwargs.get("stdout")

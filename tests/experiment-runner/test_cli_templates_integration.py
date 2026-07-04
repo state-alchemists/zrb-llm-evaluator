@@ -77,7 +77,13 @@ class TestRunCommandWithClaudeCodeTemplate:
                 "cache_read_input_tokens": 10,
             },
         })
-        _write_fake_binary(fake_bin_dir, "fake-claude", f"cat <<'JSON'\n{payload}\nJSON\nexit 0")
+        # Trailing non-JSON line: stderr is merged into the captured stream,
+        # so usage parsing must survive noise after the payload.
+        _write_fake_binary(
+            fake_bin_dir,
+            "fake-claude",
+            f"cat <<'JSON'\n{payload}\nJSON\necho 'shutdown log line'\nexit 0",
+        )
 
         out_dir = tmp_path / "out"
         result = runner.invoke(
@@ -119,12 +125,28 @@ class TestRunCommandWithOpencodeTemplate:
     ) -> None:
         """results.json is populated via OpencodeCliAdapter; statuses are terminal."""
         cases_dir = _make_case_dir(tmp_path)
+        events = "\n".join([
+            json.dumps({
+                "type": "tool_use",
+                "part": {"type": "tool", "tool": "read", "state": {"status": "completed"}},
+            }),
+            json.dumps({
+                "type": "step_finish",
+                "part": {
+                    "type": "step-finish",
+                    "reason": "stop",
+                    "cost": 0,
+                    "tokens": {
+                        "input": 40,
+                        "output": 20,
+                        "reasoning": 0,
+                        "cache": {"read": 5, "write": 0},
+                    },
+                },
+            }),
+        ])
         _write_fake_binary(
-            fake_bin_dir,
-            "fake-opencode",
-            "echo 'opencode run output'\n"
-            "echo 'Tokens: 40 in / 20 out / 5 cached / 65 total'\n"
-            "exit 0",
+            fake_bin_dir, "fake-opencode", f"cat <<'JSON'\n{events}\nJSON\nexit 0",
         )
 
         out_dir = tmp_path / "out"
@@ -154,6 +176,9 @@ class TestRunCommandWithOpencodeTemplate:
         assert entry["output_tokens"] == 20
         assert entry["cache_read_tokens"] == 5
         assert entry["total_tokens"] == 65
+        # Tool calls come from the tool_use event in the NDJSON snapshot.
+        assert entry["tool_calls"] == ["read"]
+        assert entry["tool_call_count"] == 1
 
 
 class TestEvaluateNonZrbCli:
@@ -164,10 +189,22 @@ class TestEvaluateNonZrbCli:
     ) -> None:
         """1 model x 1 case x 2 trials via opencode -> results.json + report.md, same as zrb."""
         cases_dir = _make_case_dir(tmp_path)
+        event = json.dumps({
+            "type": "step_finish",
+            "part": {
+                "type": "step-finish",
+                "reason": "stop",
+                "cost": 0,
+                "tokens": {
+                    "input": 10,
+                    "output": 5,
+                    "reasoning": 0,
+                    "cache": {"read": 0, "write": 0},
+                },
+            },
+        })
         _write_fake_binary(
-            fake_bin_dir,
-            "fake-opencode",
-            "echo 'Tokens: 10 in / 5 out / 0 cached / 15 total'\nexit 0",
+            fake_bin_dir, "fake-opencode", f"cat <<'JSON'\n{event}\nJSON\nexit 0",
         )
 
         out_dir = tmp_path / "out"

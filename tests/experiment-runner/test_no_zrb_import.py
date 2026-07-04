@@ -4,8 +4,12 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class TestNoZrbImport:
@@ -24,11 +28,16 @@ for mod_name in list(sys.modules.keys()):
         sys.exit(1)
 print("OK: no zrb internals imported")
 """
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(
+            p for p in (str(REPO_ROOT / "src"), env.get("PYTHONPATH")) if p
+        )
         result = subprocess.run(
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
-            cwd="/Users/gofrendigunawan/zrb-llm-evaluator",
+            cwd=str(REPO_ROOT),
+            env=env,
         )
         assert result.returncode == 0, f"stdout: {result.stdout}, stderr: {result.stderr}"
         assert "OK: no zrb internals imported" in result.stdout

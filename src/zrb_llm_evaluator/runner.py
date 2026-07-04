@@ -697,6 +697,7 @@ async def run_experiment(
     config: ExperimentConfig,
     test_cases: list[TestCase],
     output_dir: Path,
+    cli_adapter: CliAdapter | None = None,
 ) -> Experiment:
     """Run a full experiment: all models x test cases x trials.
 
@@ -705,16 +706,20 @@ async def run_experiment(
     ``id`` and ``started_at`` are preserved so a single experiment can be
     rerun without losing its identity.
 
-    ``config.cli_template`` is resolved to a ``CliAdapter`` once, inside
-    ``WorkSteward.__init__`` below, before any cell is scheduled — an
-    unresolvable template raises ``ValueError`` here, before any trial
-    begins (REQ-038).
+    When ``cli_adapter`` is omitted, ``config.cli_template`` is resolved
+    once, inside ``WorkSteward.__init__`` below, before any cell is
+    scheduled — an unresolvable template raises ``ValueError`` here, before
+    any trial begins (REQ-038). Callers that already resolved an adapter
+    (the CLI layer) pass it in so a custom adapter is constructed exactly
+    once per experiment.
 
     Args:
     ----
         config: Experiment configuration.
         test_cases: Loaded test cases.
         output_dir: Root output directory for results.
+        cli_adapter: Optional pre-resolved ``CliAdapter`` shared by every
+            trial.
 
     Returns:
     -------
@@ -735,7 +740,7 @@ async def run_experiment(
 
     experiment = _load_or_init_experiment(experiment_path, config)
 
-    steward = WorkSteward(config, test_cases, output_dir, resume_mgr)
+    steward = WorkSteward(config, test_cases, output_dir, resume_mgr, cli_adapter)
     results = await steward.run_all()
 
     experiment.results = results
