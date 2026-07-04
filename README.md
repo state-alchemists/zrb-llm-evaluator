@@ -31,8 +31,8 @@ zrb-llm-evaluator run \
 - Resume support: re-run with the same output directory to skip completed cells
 - Pluggable validators: each test case provides a `validator.py` implementing a typed protocol
 - Atomic `results.json` writes (temp file + `os.rename`)
-- Cost summary line parsing from `zrb` output
-- Custom CLI binary name for white-labeled `zrb` forks
+- Pluggable CLI adapters: built-in support for `zrb`, `claude-code`, and `opencode`, or bring your own via a dotted import path
+- Custom CLI binary name for white-labeled forks
 
 ## Installation
 
@@ -142,7 +142,10 @@ zrb-llm-evaluator run \
 | `--trials` | `3` | Trials per model × test case cell |
 | `--parallelism` | `4` | Max concurrent subprocesses |
 | `--timeout` | `300` | Per-trial timeout in seconds |
-| `--cli-name` | `zrb` | CLI binary to invoke |
+| `--cli-name` | template's own binary | CLI binary to invoke (e.g. `zrb`, `claude`, `opencode`) |
+| `--cli-template` | `zrb` | Which `CliAdapter` to use: `zrb`, `claude-code`, `opencode`, or a dotted import path to a custom adapter class |
+| `--env-prefix` | `ZRB` | Env var prefix for the `zrb` adapter's history/journal dirs (`{prefix}_LLM_*`) |
+| `--honor-verification-marker` | off | Let a `VERIFICATION_RESULT:` line in the agent's own stdout override the validator verdict. Off by default — letting the agent under test grade itself is opt-in |
 | `--output-dir` | `./out` | Output directory for results |
 
 Output: `results.json` (structured) + `report.md` (human-readable).
@@ -173,6 +176,19 @@ The runner has four layers:
 4. **Reporter** (`reporter.py`) — Generates Markdown and JSON output with atomic file writes
 
 Key design decisions are documented in `.sdlc/docs/adr/`.
+
+### CLI Adapters
+
+`--cli-template` selects a `CliAdapter` (`cli_adapters.py`) that owns every CLI-specific decision — the subprocess command line, env vars, and how usage/tool calls are parsed from output. The runner itself never hardcodes a particular CLI's invocation.
+
+| Template | Invokes | Usage parsed from |
+|----------|---------|--------------------|
+| `zrb` (default) | `zrb chat --interactive false --yolo true ...` | `💸` stdout summary line |
+| `claude-code` | `claude -p ... --output-format stream-json --dangerously-skip-permissions` | `usage` block of the final `result` event |
+| `opencode` | `opencode run ... --format json --dangerously-skip-permissions` | summed `step_finish` events (NDJSON) |
+| custom | your adapter's `build_argv` | your adapter's `parse_usage` |
+
+For a custom CLI, pass a dotted import path (e.g. `--cli-template mypkg.MyAdapter`) to a class implementing the `CliAdapter` protocol in `protocols.py`. Unresolvable templates fail fast before any trial runs.
 
 ## Output Structure
 
