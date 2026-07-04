@@ -65,6 +65,19 @@
 | UT-057 | REQ-013 | test_relative_test_case_dirs_resolved_to_absolute | `--test-cases ./cases/` (relative) | paths resolved to absolute before `load_test_cases` is called <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
 | UT-058 | REQ-034 | test_load_test_cases_aggregates_all_errors | two invalid test case dirs | single `ValueError` containing both error messages <!-- added 2026-06-24 (quickfix-2026-06-24T23-43-58) --> |
 | UT-059 | REQ-031 | test_cell_dir_wiped_on_retry | cell_dir pre-created with stale-artifact.txt | stale file absent after run; cell_dir recreated <!-- added 2026-06-25 (quickfix-2026-06-24T23-43-58) --> |
+| UT-060 | REQ-035 | test_adapter_selected_by_cli_template | `cli_template="zrb"` | `TrialRunner` resolves and uses a `ZrbCliAdapter` instance for `build_argv`/`build_env`/`parse_usage`/`extract_tool_calls` <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-061 | REQ-036 | test_default_cli_template_is_zrb | `ExperimentConfig()` with no `cli_template` given | `config.cli_template == "zrb"`; resulting argv/env/parsed usage identical to the pre-feature runner (same assertions as UT-014/UT-019/UT-022) <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-062 | REQ-037 | test_custom_adapter_loaded_from_dotted_path | `cli_template="tests.fixtures.custom_adapter.FakeAdapter"` | Runner imports and instantiates `FakeAdapter`; it is used to build the trial's argv/env and parse its output <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-063 | REQ-038 | test_unknown_cli_template_rejected | `cli_template="not-a-real-template"` | Runner exits non-zero with `INVALID_TEMPLATE` before any trial begins <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-064 | REQ-038 | test_dotted_path_not_implementing_protocol_rejected | `cli_template` resolves to a class missing one or more `CliAdapter` methods | Runner exits non-zero with `INVALID_TEMPLATE` before any trial begins <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-065 | REQ-039 | test_token_fields_from_adapter_parse_usage | Fake adapter whose `parse_usage` returns `UsageSummary(total_tokens=42, input_tokens=30, output_tokens=12, cache_read_tokens=0)` | `TrialResult.total_tokens==42`, `input_tokens==30`, `output_tokens==12`, `cache_read_tokens==0` <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-066 | REQ-039 | test_tool_calls_from_adapter_extract_tool_calls | Fake adapter whose `extract_tool_calls` returns `(["read", "write"], 2)` | `TrialResult.tool_calls == ["read", "write"]`, `tool_call_count == 2` <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-067 | REQ-039 | test_adapter_usage_defaults_when_unavailable | Fake adapter whose `parse_usage`/`extract_tool_calls` return all-zero/empty values | `TrialResult` token fields default to 0 and `tool_calls` defaults to `[]`, matching existing "missing" semantics (REQ-019's zero-default behavior) <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-068 | REQ-040 | test_claude_code_history_written_under_cell_history_dir | `cli_template="claude-code"`, mocked subprocess | `ClaudeCodeCliAdapter.history_log_path()` returns a path inside `cell_dir/history/` <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-069 | REQ-041 | test_claude_code_argv_uses_print_mode | `cli_template="claude-code"`, model, instruction | `build_argv` returns an argv beginning with `cli_name`, containing the non-interactive/print flag and the JSON-output flag <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-070 | REQ-041 | test_claude_code_parses_usage_from_json_output | Sample Claude Code JSON stdout containing a `usage` block | `UsageSummary` fields match the JSON's input/output/cache-read counts <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-071 | REQ-042 | test_opencode_argv_uses_run_mode | `cli_template="opencode"` | `build_argv` returns an argv beginning with `cli_name` and opencode's non-interactive run subcommand <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-072 | REQ-042 | test_opencode_parses_usage_from_output | Sample opencode stdout | `UsageSummary` fields populated by `OpencodeCliAdapter.parse_usage` <!-- added 2026-07-03 (spec/cli-templates) --> |
 
 ## Integration Tests
 
@@ -76,6 +89,8 @@
 | IT-004 | Validator protocol | test_custom_validator_executed | Test case with validator.py returning ValidationResult(status=EXCELLENT, score=0.95, details=[]) | results.json has verification_result with score=0.95 |
 | IT-005 | TrialRunner + filesystem | test_isolation_end_to_end | Real (mocked) subprocess that lists its `cwd` to stdout; test case has `workdir/data.txt` + `validator.py` + `instruction.txt` | Captured stdout reports `cwd` listing contains `data.txt` only; no `stdout.log`, no `history`, no `validator.py`, no `instruction.txt` |
 | IT-006 | MarkdownReporter end-to-end | test_report_md_full_pipeline_sort_bold_icons | Run a small experiment (2 models × 2 cases × 2 trials, mix of statuses); inspect `report.md` | Rows sorted; best-PASS cells bold per test case; status column contains icons; no HTML present |
+| IT-007 | CliAdapter + Runner | test_run_command_with_claude_code_template | Run `zrb-llm-evaluator run --cli-template claude-code ...` against a mocked `claude-code` binary | `results.json` has entries populated via `ClaudeCodeCliAdapter`; statuses terminal <!-- added 2026-07-03 (spec/cli-templates) --> |
+| IT-008 | CliAdapter + Runner | test_run_command_with_opencode_template | Run `zrb-llm-evaluator run --cli-template opencode ...` against a mocked `opencode` binary | `results.json` has entries populated via `OpencodeCliAdapter`; statuses terminal <!-- added 2026-07-03 (spec/cli-templates) --> |
 
 ## End-to-End Tests
 
@@ -85,6 +100,7 @@
 | E2E-002 | US-003 | Timeout preserves history | 1. Create a test case with a long-running instruction; 2. Run with --timeout 5; 3. Check logs | Trial has TIMEOUT status; history JSON file exists on disk |
 | E2E-003 | US-007 | Resume after Ctrl+C | 1. Start experiment with 4 cells; 2. Kill after cell 2; 3. Re-run with same output dir | Cells 1-2 skipped; cells 3-4 execute; final results.json has 4 entries |
 | E2E-004 | US-009 | Scannable report after a run | 1. Run a full experiment with mixed statuses; 2. Open `report.md` | Rows ordered by model→case→trial; per-test-case best `duration`/`score`/`total_tokens`/`tool_call_count` cells bold; status icons render for all five statuses |
+| E2E-005 | US-011 | Evaluate a non-zrb CLI | 1. Create test case dirs with validators; 2. Run `zrb-llm-evaluator run --models m1 --test-cases ./cases/ --trials 2 --cli-template opencode --output-dir ./exp`; 3. Inspect `./exp` | `results.json`/`report.md` produced exactly as with the `zrb` template, using the opencode CLI <!-- added 2026-07-03 (spec/cli-templates) --> |
 
 ## Property-Based Tests
 
@@ -94,10 +110,10 @@ N/A — no property-testing framework configured.
 
 | Property | Covered By | Notes |
 |----------|------------|-------|
-| Round-Trip | UT-020, UT-022, UT-023, UT-042 | Pydantic serialization/deserialization verified via results.json write + token field defaults; report rendering is deterministic byte-identical across runs |
+| Round-Trip | UT-020, UT-022, UT-023, UT-042, UT-065 | Pydantic serialization/deserialization verified via results.json write + token field defaults; report rendering is deterministic byte-identical across runs; `UsageSummary` round-trips into `TrialResult` token fields regardless of adapter |
 | Uniqueness | UT-001, UT-018 | Session name uniqueness + output dir hierarchy enforcement |
 | Atomicity | UT-020 | Atomic write via temp file + os.rename; results.json always valid JSON |
-| Validation | UT-013, UT-015, UT-016, UT-017, UT-018, UT-029, UT-030, UT-031, UT-035 | Config validation (model format, required args) + test case import rejection + per-trial filesystem layout invariants + report output is pure Markdown (no HTML) |
+| Validation | UT-013, UT-015, UT-016, UT-017, UT-018, UT-029, UT-030, UT-031, UT-035, UT-063, UT-064 | Config validation (model format, required args, `cli_template`) + test case import rejection + per-trial filesystem layout invariants + report output is pure Markdown (no HTML) + adapter resolution failures rejected before any trial |
 | Idempotency | UT-006, IT-002 | Resume skips terminal cells; re-run produces identical results |
 
 ## Test Data Strategy

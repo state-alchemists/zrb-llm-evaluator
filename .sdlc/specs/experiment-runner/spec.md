@@ -21,10 +21,10 @@
 - `REQ-013` (AC-002): IF a test case directory does not contain a valid validator module, THEN the system SHALL reject that test case with a clear error message before any trial begins. <!-- updated 2026-06-24 (quickfix-2026-06-24T23-43-58): canonical EARS, migrated from deprecated negation form -->
 - `REQ-014` (AC-001): IF any required argument (models, test-cases, trials) is absent, THEN the CLI SHALL print usage and exit non-zero. <!-- updated 2026-06-24 (quickfix-2026-06-24T23-43-58): canonical EARS, migrated from deprecated negation form -->
 - `REQ-015` (AC-001): The runner SHALL accept models in `provider:model_name` format (e.g., `openai:gpt-4o`).
-- `REQ-016` (AC-003): The runner SHALL set `{env_prefix}_LLM_HISTORY_DIR` and `{env_prefix}_LLM_JOURNAL_DIR` (where `env_prefix` is the configured env-var prefix on `ExperimentConfig`, default `ZRB`) to per-cell sibling directories of `workdir/`, and SHALL pass `--session` to each `zrb chat` invocation, so that conversation history and journal notes are isolated per trial. <!-- updated 2026-05-24 (quickfix-2026-05-24T23-45-24); merged with env_prefix support from feat/override-env -->
+- `REQ-016` (AC-003): WHERE `cli_template` is `zrb` (the default), the runner SHALL set `{env_prefix}_LLM_HISTORY_DIR` and `{env_prefix}_LLM_JOURNAL_DIR` (where `env_prefix` is the configured env-var prefix on `ExperimentConfig`, default `ZRB`) to per-cell sibling directories of `workdir/`, and SHALL pass `--session` to each `zrb chat` invocation, so that conversation history and journal notes are isolated per trial. <!-- updated 2026-05-24 (quickfix-2026-05-24T23-45-24); merged with env_prefix support from feat/override-env; updated 2026-07-03 (spec/cli-templates): scoped to the zrb adapter — behavior unchanged for cli_template=zrb -->
 - `REQ-017` (AC-005): The runner SHALL write each completed `TrialResult` to `results.json` immediately upon finishing.
 - `REQ-018` (AC-001): The runner SHALL create a per-cell output directory: `{output_dir}/{model_safe}/{test_case}/trial-{N}/`.
-- `REQ-019`: The runner SHALL parse the zrb `💸` usage summary line from subprocess stdout — matching the actual zrb format `💸 (Requests: … | Tool Calls: … | Total: T) Input: I | Audio Input: … | Output: O | Audio Output: … | Cache Read: C | …` — and populate `total_tokens`, `input_tokens`, `output_tokens`, and `cache_read_tokens` in `TrialResult`. WHERE multiple summary lines appear, ONLY the LAST one SHALL be used (zrb's per-run totals are already cumulative across turns; summing would double-count). <!-- updated 2026-05-24 (quickfix-2026-05-24T23-45-24) -->
+- `REQ-019`: WHERE `cli_template` is `zrb` (the default), the runner SHALL parse the zrb `💸` usage summary line from subprocess stdout — matching the actual zrb format `💸 (Requests: … | Tool Calls: … | Total: T) Input: I | Audio Input: … | Output: O | Audio Output: … | Cache Read: C | …` — and populate `total_tokens`, `input_tokens`, `output_tokens`, and `cache_read_tokens` in `TrialResult`. WHERE multiple summary lines appear, ONLY the LAST one SHALL be used (zrb's per-run totals are already cumulative across turns; summing would double-count). <!-- updated 2026-05-24 (quickfix-2026-05-24T23-45-24); updated 2026-07-03 (spec/cli-templates): scoped to the zrb adapter — behavior unchanged for cli_template=zrb -->
 - `REQ-020` (AC-008): The trial subprocess `cwd` SHALL be a nested `workdir/` directory inside the per-trial cell directory — never the cell directory itself. <!-- updated 2026-06-24 (quickfix-2026-06-24T23-43-58): canonical EARS, migrated from deprecated ubiquitous form -->
 - `REQ-021` (AC-008): The trial's `stdout.log`, `history/` directory, `notes/` directory, and any other evaluation artifacts SHALL live as siblings of `workdir/` and not inside it. <!-- updated 2026-06-24 (quickfix-2026-06-24T23-43-58): canonical EARS, migrated from deprecated ubiquitous form -->
 - `REQ-022` (AC-009): WHEN a test case has no dedicated `workdir/` source to stage THEN SHALL the runner create an empty `workdir/` directory inside the trial cell before launching the subprocess.
@@ -40,6 +40,14 @@
 - `REQ-032`: WHEN the user invokes `zrb-llm-evaluator list --dir DIR` THEN SHALL the CLI read `DIR/results.json` and print a tabular summary (model, test_case, trial_index, status, duration) for every persisted trial, exiting non-zero if the file is absent. <!-- added 2026-05-25 (sdlc-document drift-report-2026-05-25T01-05-34) -->
 - `REQ-033`: WHEN the user invokes `zrb-llm-evaluator report --dir DIR` THEN SHALL the CLI re-render `report.md` from `DIR/experiment.json` without re-running any trials, exiting non-zero if `experiment.json` is absent. <!-- added 2026-05-25 (sdlc-document drift-report-2026-05-25T01-05-34) -->
 - `REQ-034`: IF one or more test case directories are invalid when `load_test_cases` is called, THEN it SHALL aggregate every error into a single `ValueError` rather than failing on the first, so the user sees all problems at once. <!-- added 2026-05-25 (sdlc-document drift-report-2026-05-25T01-05-34); updated 2026-06-24 (quickfix-2026-06-24T23-43-58): canonical EARS, migrated from deprecated pre-EARS compound conditional form -->
+- `REQ-035` (AC-018, AC-019): The runner SHALL select a `CliAdapter` implementation from `ExperimentConfig.cli_template` and SHALL build every trial's subprocess command line, environment variables, and output-parsing behavior entirely through that adapter, never inline in the runner. <!-- added 2026-07-03 (spec/cli-templates) -->
+- `REQ-036` (AC-019): WHEN `cli_template` is not specified, the runner SHALL use the `zrb` adapter, which SHALL preserve the exact subprocess invocation, environment variables, and parsing behavior described by REQ-012, REQ-016, and REQ-019. <!-- added 2026-07-03 (spec/cli-templates) -->
+- `REQ-037` (AC-022): WHEN `cli_template` is not one of the built-in names (`zrb`, `claude-code`, `opencode`), the runner SHALL treat it as a dotted Python import path and dynamically import and instantiate the referenced class as the `CliAdapter`. <!-- added 2026-07-03 (spec/cli-templates) -->
+- `REQ-038` (AC-022): IF the configured `cli_template` is neither a built-in name nor an importable dotted path resolving to a class implementing the `CliAdapter` protocol, THEN the runner SHALL exit non-zero with a clear error before any trial begins. <!-- added 2026-07-03 (spec/cli-templates) -->
+- `REQ-039` (AC-020): The runner SHALL populate `TrialResult.total_tokens`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `tool_calls`, and `tool_call_count` exclusively from the selected adapter's `parse_usage` and `extract_tool_calls` methods, defaulting to `0` / an empty list when the adapter cannot determine a value. <!-- added 2026-07-03 (spec/cli-templates) -->
+- `REQ-040` (AC-021): Each built-in adapter SHALL write (or point the runner to) conversation history under the trial's per-cell `history/` directory (via `history_log_path`), so that partial history is present on disk if the trial times out, consistent with REQ-008. <!-- added 2026-07-03 (spec/cli-templates) -->
+- `REQ-041` (AC-018): WHERE `cli_template` is `claude-code`, the runner SHALL invoke the Claude Code CLI's non-interactive ("print") mode with structured (JSON) output enabled, and SHALL parse token usage from that JSON output via `parse_usage`. <!-- added 2026-07-03 (spec/cli-templates) -->
+- `REQ-042` (AC-018): WHERE `cli_template` is `opencode`, the runner SHALL invoke the opencode CLI's non-interactive run mode, and SHALL parse token usage from its output via `parse_usage`. <!-- added 2026-07-03 (spec/cli-templates) -->
 
 ## Non-Functional Requirements
 
@@ -58,7 +66,7 @@ The primary interface is a CLI with subcommands:
 
 | Method | Path | Request | Response | Auth |
 |--------|------|---------|----------|------|
-| CLI | `zrb-llm-evaluator run` | `--models`, `--test-cases`, `--trials`, `--parallelism`, `--timeout`, `--cli-name`, `--env-prefix`, `--output-dir` | stdout progress + filesystem results | None |
+| CLI | `zrb-llm-evaluator run` | `--models`, `--test-cases`, `--trials`, `--parallelism`, `--timeout`, `--cli-name`, `--env-prefix`, `--cli-template`, `--output-dir` | stdout progress + filesystem results | None |
 | CLI | `zrb-llm-evaluator list [dir]` | `--dir` (optional, default CWD) | Table of previously-run experiments | None |
 | CLI | `zrb-llm-evaluator report [dir]` | `--dir` (optional, default CWD) | Re-generated report to stdout | None |
 
@@ -67,7 +75,8 @@ The primary interface is a CLI with subcommands:
 | Condition | Status | Body |
 |-----------|--------|------|
 | Test case validator not found or invalid (`INVALID_CASE`) | Runner exits non-zero before any trial | User fixes validator module |
-| zrb chat subprocess not found (`CLI_NOT_FOUND`) | Trial: ERROR, continue to next cell | User installs zrb or corrects --cli-name |
+| Unknown `--cli-template` (`INVALID_TEMPLATE`) | Runner exits non-zero before any trial | User picks a built-in name (`zrb`/`claude-code`/`opencode`) or a valid dotted path to a `CliAdapter` implementation |
+| Target CLI subprocess not found (`CLI_NOT_FOUND`) | Trial: ERROR, continue to next cell | User installs the CLI (zrb/Claude Code/opencode) or corrects --cli-name |
 | Subprocess timeout (`TIMEOUT`) | Trial: TIMEOUT, partial log preserved; the entire descendant process group is killed via `os.killpg(SIGKILL)` so `zrb chat` workers cannot outlive the timeout (REQ-005) | Retry with higher timeout |
 | Subprocess non-zero exit (`EXIT_ERROR`) | Trial: ERROR (unless overridden by verification marker) | Debug via preserved log |
 | Validator raised exception (`VALIDATOR_ERROR`) | Trial: ERROR with exception message | Fix validator, resume |
@@ -94,8 +103,9 @@ Each trial result is appended to `results.json` atomically: write to a temp file
 - `timeout`: int >= 30
 - `cli_name`: non-empty string
 - `env_prefix`: non-empty string, default `"ZRB"`
+- `cli_template`: non-empty string, default `"zrb"`; must be `"zrb"`, `"claude-code"`, `"opencode"`, or a dotted path importable to a class implementing `CliAdapter`
 
-Test case modules are dynamically imported and checked against `ValidatorProtocol` at load time. A test case that fails protocol conformance is rejected with a clear error before any trial begins.
+Test case modules are dynamically imported and checked against `ValidatorProtocol` at load time. A test case that fails protocol conformance is rejected with a clear error before any trial begins. `cli_template` is resolved to a `CliAdapter` instance the same way — at load time, before any trial begins — so a bad template name or a custom adapter missing required methods fails fast (REQ-038) rather than mid-experiment.
 
 ### Idempotency
 The runner is idempotent when pointed at an existing output directory. On startup, it loads `results.json` and skips any cell whose triple `(model, test_case, trial_index)` already has a terminal status (EXCELLENT/PASS/FAIL/TIMEOUT/ERROR). Re-running the same command produces the same results without duplication. Non-terminal cells (from a prior interrupted run) are retried.
@@ -148,13 +158,28 @@ supporting white-label zrb forks with a different `ENV_PREFIX`.
 
 Determinism: given the same `results.json`, repeated runs of `MarkdownReporter` produce byte-identical `report.md`.
 
+## CLI Templates (per RULE-005)
+
+`TrialRunner` no longer hardcodes zrb's invocation, env vars, or output format. It resolves one `CliAdapter` per experiment (REQ-035) and delegates every CLI-specific decision to it:
+
+| Template | `build_argv` (illustrative) | Usage source | Status |
+|----------|------------------------------|--------------|--------|
+| `zrb` (default) | `{cli_name} chat --interactive false --yolo true --model {model} --message {instruction} --session {session_name}` | `💸` stdout summary line | Existing behavior (REQ-012/016/019), unchanged |
+| `claude-code` | `{cli_name} -p {instruction} --output-format json --model {model} ...` | `usage` block in the CLI's JSON stdout | New; non-interactive/print flags assumed from Claude Code's documented `-p`/`--output-format json` mode |
+| `opencode` | `{cli_name} run {instruction} --model {model} ...` | opencode's own usage/summary output | New; exact flags **not yet verified against an installed opencode build** — confirm during implementation and adjust `OpencodeCliAdapter.build_argv`/`parse_usage` if the real CLI differs |
+| custom | user-defined | user-defined | Loaded via dotted import path (REQ-037) |
+
+The `claude-code` and `opencode` rows are implementation guidance, not literal contracts — REQ-041/REQ-042 only commit to "non-interactive invocation + structured usage parsing," so a flag-name correction to either adapter is a normal code change, not a spec/requirement change.
+
 ## Entities
 
 See `.sdlc/requirements/entity-dictionary.md`. Fields this feature reads/writes:
 
 | Entity | Fields Used | Notes |
 |--------|-------------|-------|
-| ExperimentConfig | models, test_case_dirs, trials, parallelism, timeout, cli_name, env_prefix | Input to the runner; env_prefix controls the `{prefix}_LLM_*` env var names |
+| ExperimentConfig | models, test_case_dirs, trials, parallelism, timeout, cli_name, env_prefix, cli_template | Input to the runner; `cli_template` selects the `CliAdapter`; env_prefix controls the `{prefix}_LLM_*` env var names used by the zrb adapter |
+| CliAdapter | build_argv, build_env, history_log_path, parse_usage, extract_tool_calls | Resolved once per experiment from `cli_template`; the runner delegates all CLI-specific behavior to it |
+| UsageSummary | total_tokens, input_tokens, output_tokens, cache_read_tokens | Returned by `CliAdapter.parse_usage`; merged into `TrialResult`'s token fields |
 | TestCase | name, instruction, workdir, validator | Discovered from disk per test case directory |
 | TrialResult | model, test_case, trial_index, status, duration, tool_calls, tool_call_count, exit_code, log_path, stdout_log_path, verification_result, total_tokens, input_tokens, output_tokens, cache_read_tokens | Written to results.json after each cell |
 | Experiment | id, config, results, started_at, completed_at | Envelope persisted as experiment.json; id + started_at survive across resumed invocations |
@@ -163,6 +188,8 @@ See `.sdlc/requirements/entity-dictionary.md`. Fields this feature reads/writes:
 | Report | experiment_id, markdown_path, json_path, generated_at | Manifest returned by report generators; describes the artifacts they produced |
 
 ### Entity Modifications
+- `ExperimentConfig.cli_template` is added (default `"zrb"`) to select the `CliAdapter` used for every trial in the experiment.
+- `CliAdapter` (Protocol) and `UsageSummary` (Pydantic model) are added; `parse_cost_summary`'s ad-hoc dict return is superseded by `CliAdapter.parse_usage() -> UsageSummary` going forward — the zrb adapter's implementation preserves the exact parsing behavior of REQ-019.
 - `TrialResult.stdout_log_path` is added so the result references both the zrb history JSON (`log_path`) and the raw subprocess stdout/stderr log (`stdout_log_path`, written to `stdout.log`).
 - `TrialResult.tool_calls` (list of tool names) and `TrialResult.tool_call_count` are added so the report can summarize tool usage per cell.
 - `Experiment` envelopes the run (config + results + timing) and is persisted as `experiment.json` alongside the per-trial-streamed `results.json`.

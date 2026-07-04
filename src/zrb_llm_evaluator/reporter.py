@@ -1,7 +1,14 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md,
 #                      .sdlc/specs/report-aggregate/spec.md
-# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-025, EXPERIMENT-RUNNER:REQ-026, EXPERIMENT-RUNNER:REQ-027, EXPERIMENT-RUNNER:REQ-028, EXPERIMENT-RUNNER:REQ-029
-# IMPLEMENTS: REPORT-AGGREGATE:REQ-030, REPORT-AGGREGATE:REQ-031, REPORT-AGGREGATE:REQ-032, REPORT-AGGREGATE:REQ-033, REPORT-AGGREGATE:REQ-034, REPORT-AGGREGATE:REQ-035, REPORT-AGGREGATE:REQ-036, REPORT-AGGREGATE:REQ-037, REPORT-AGGREGATE:REQ-038, REPORT-AGGREGATE:REQ-039, REPORT-AGGREGATE:REQ-040, REPORT-AGGREGATE:REQ-041, REPORT-AGGREGATE:REQ-042, REPORT-AGGREGATE:REQ-043, REPORT-AGGREGATE:NFR-002, REPORT-AGGREGATE:NFR-003, REPORT-AGGREGATE:NFR-004
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-025,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-026, EXPERIMENT-RUNNER:REQ-027, EXPERIMENT-RUNNER:REQ-028,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-029
+# IMPLEMENTS: REPORT-AGGREGATE:REQ-030, REPORT-AGGREGATE:REQ-031, REPORT-AGGREGATE:REQ-032,
+# IMPLEMENTS: REPORT-AGGREGATE:REQ-033, REPORT-AGGREGATE:REQ-034, REPORT-AGGREGATE:REQ-035,
+# IMPLEMENTS: REPORT-AGGREGATE:REQ-036, REPORT-AGGREGATE:REQ-037, REPORT-AGGREGATE:REQ-038,
+# IMPLEMENTS: REPORT-AGGREGATE:REQ-039, REPORT-AGGREGATE:REQ-040, REPORT-AGGREGATE:REQ-041,
+# IMPLEMENTS: REPORT-AGGREGATE:REQ-042, REPORT-AGGREGATE:REQ-043, REPORT-AGGREGATE:NFR-002,
+# IMPLEMENTS: REPORT-AGGREGATE:NFR-003, REPORT-AGGREGATE:NFR-004
 
 """Report generation — Markdown and JSON output."""
 
@@ -244,7 +251,7 @@ def _render_overall_status(b: _AggregateBuckets) -> list[str]:
 def _render_leaderboard(b: _AggregateBuckets) -> list[str]:
     """Render a ranked leaderboard sorted by pass rate, EXCELLENT count, avg score."""
 
-    def _rank_key(item: tuple[str, _StatusCounts]) -> tuple:
+    def _rank_key(item: tuple[str, _StatusCounts]) -> tuple[float, int, float]:
         model, c = item
         n = c.trials
         ok = c.excellent + c.passed
@@ -282,8 +289,10 @@ def _render_by_model(b: _AggregateBuckets) -> list[str]:
     """Render the By Model section."""
     lines: list[str] = [
         "\n## By Model\n\n",
-        "| Model | Trials | 👍 | ✅ | ❌ | ⏱️ | ⚠️ | Input Tokens | Output Tokens | Avg dur (s) |\n",
-        "|-------|--------|----|----|----|----|----|--------------|---------------|-------------|\n",
+        "| Model | Trials | 👍 | ✅ | ❌ | ⏱️ | ⚠️ | Input Tokens | Output Tokens | "
+        "Avg dur (s) |\n",
+        "|-------|--------|----|----|----|----|----|--------------|---------------|"
+        "-------------|\n",
     ]
     for model in sorted(b.by_model):
         c = b.by_model[model]
@@ -446,7 +455,11 @@ def generate_json_report(experiment: Experiment, output_path: Path) -> Report:
     )
 
 
-# @sdlc EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-025, EXPERIMENT-RUNNER:REQ-026, EXPERIMENT-RUNNER:REQ-027, EXPERIMENT-RUNNER:REQ-028, EXPERIMENT-RUNNER:REQ-029, REPORT-AGGREGATE:REQ-030, REPORT-AGGREGATE:REQ-031, REPORT-AGGREGATE:REQ-032, REPORT-AGGREGATE:REQ-033, REPORT-AGGREGATE:REQ-034, REPORT-AGGREGATE:REQ-042, REPORT-AGGREGATE:NFR-004
+# @sdlc EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-025, EXPERIMENT-RUNNER:REQ-026,
+# @sdlc EXPERIMENT-RUNNER:REQ-027, EXPERIMENT-RUNNER:REQ-028, EXPERIMENT-RUNNER:REQ-029,
+# @sdlc REPORT-AGGREGATE:REQ-030, REPORT-AGGREGATE:REQ-031, REPORT-AGGREGATE:REQ-032,
+# @sdlc REPORT-AGGREGATE:REQ-033, REPORT-AGGREGATE:REQ-034, REPORT-AGGREGATE:REQ-042,
+# @sdlc REPORT-AGGREGATE:NFR-004
 def generate_markdown_report(experiment: Experiment, output_path: Path) -> Report:
     """Generate a human-readable Markdown report.
 

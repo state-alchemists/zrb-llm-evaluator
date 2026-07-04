@@ -135,6 +135,12 @@ class TestTrialRunner:
         assert result.status == "TIMEOUT"
         # @sdlc EXPERIMENT-RUNNER:REQ-008: log_path references a file
         assert result.log_path != ""
+        # Forensic validation: the validator still ran over the on-disk
+        # state and its verdict is recorded, even though the status stays
+        # TIMEOUT (the sample validator always returns PASS / 0.9).
+        assert result.verification_result is not None
+        assert result.verification_result.status == "PASS"
+        assert result.verification_result.score == 0.9
 
     # COVERS: EXPERIMENT-RUNNER:REQ-005 (EXPERIMENT-RUNNER:UT-043)
     @pytest.mark.asyncio
@@ -217,13 +223,14 @@ class TestTrialRunner:
     async def test_verification_marker_overrides_exit(
         self, tmp_path: Path, sample_test_case
     ) -> None:
-        """EXPERIMENT-RUNNER:UT-008: VERIFICATION_RESULT: PASS overrides exit code 1."""
+        """EXPERIMENT-RUNNER:UT-008: with the opt-in set, VERIFICATION_RESULT: PASS overrides exit code 1."""
         config = ExperimentConfig(
             models=["openai:gpt-4o"],
             test_case_dirs=[tmp_path],
             trials=1,
             parallelism=1,
             timeout=30,
+            honor_verification_marker=True,
         )
         output_dir = tmp_path / "out"
 
@@ -247,6 +254,78 @@ class TestTrialRunner:
             result = await runner.run("openai:gpt-4o", 1)
 
         assert result.status == "PASS"
+
+    @pytest.mark.asyncio
+    async def test_verification_marker_ignored_by_default(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """By default the stdout marker cannot override the validator verdict.
+
+        The agent prints VERIFICATION_RESULT: EXCELLENT, but with
+        ``honor_verification_marker`` unset the validator's PASS wins —
+        otherwise the agent under test could grade itself.
+        """
+        config = ExperimentConfig(
+            models=["openai:gpt-4o"],
+            test_case_dirs=[tmp_path],
+            trials=1,
+            parallelism=1,
+            timeout=30,
+        )
+        output_dir = tmp_path / "out"
+
+        stdout_bytes = b"All done!\nVERIFICATION_RESULT: EXCELLENT\n"
+        mock_proc = AsyncMock()
+        mock_proc.wait = AsyncMock(return_value=0)
+        mock_proc.returncode = 0
+
+        async def writing_create(*args: object, **kwargs: object) -> AsyncMock:
+            log_file = kwargs.get("stdout")
+            if log_file is not None:
+                log_file.write(stdout_bytes)
+                log_file.flush()
+            return mock_proc
+
+        with patch.object(asyncio, "create_subprocess_exec", writing_create):
+            runner = TrialRunner(config, sample_test_case, output_dir)
+            result = await runner.run("openai:gpt-4o", 1)
+
+        # Validator verdict (PASS / 0.9), not the self-reported EXCELLENT.
+        assert result.status == "PASS"
+        assert result.verification_result is not None
+        assert result.verification_result.score == 0.9
+
+    @pytest.mark.asyncio
+    async def test_verification_marker_ignored_on_error_exit_by_default(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """By default a marker cannot rescue a non-zero exit: status stays ERROR."""
+        config = ExperimentConfig(
+            models=["openai:gpt-4o"],
+            test_case_dirs=[tmp_path],
+            trials=1,
+            parallelism=1,
+            timeout=30,
+        )
+        output_dir = tmp_path / "out"
+
+        stdout_bytes = b"Some output\nVERIFICATION_RESULT: PASS\nDone.\n"
+        mock_proc = AsyncMock()
+        mock_proc.wait = AsyncMock(return_value=1)
+        mock_proc.returncode = 1
+
+        async def writing_create(*args: object, **kwargs: object) -> AsyncMock:
+            log_file = kwargs.get("stdout")
+            if log_file is not None:
+                log_file.write(stdout_bytes)
+                log_file.flush()
+            return mock_proc
+
+        with patch.object(asyncio, "create_subprocess_exec", writing_create):
+            runner = TrialRunner(config, sample_test_case, output_dir)
+            result = await runner.run("openai:gpt-4o", 1)
+
+        assert result.status == "ERROR"
 
     @pytest.mark.asyncio
     async def test_cli_name_custom_binary(

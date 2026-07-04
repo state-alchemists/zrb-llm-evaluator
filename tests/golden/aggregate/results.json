@@ -12,7 +12,9 @@
     "timeout": 30,
     "cli_name": "zrb",
     "cli_version": "",
-    "env_prefix": "ZRB"
+    "env_prefix": "ZRB",
+    "cli_template": "zrb",
+    "honor_verification_marker": false
   },
   "results": [
     {

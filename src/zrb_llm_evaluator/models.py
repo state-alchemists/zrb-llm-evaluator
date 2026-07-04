@@ -1,5 +1,8 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:NFR-002, RULE-001, RULE-003
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-003, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-017,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:NFR-002, RULE-001, RULE-003
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-036, EXPERIMENT-RUNNER:REQ-037,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-038, EXPERIMENT-RUNNER:REQ-039
 
 """Pydantic v2 models for the experiment runner."""
 
@@ -43,6 +46,22 @@ class ToolCallRecord(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
 
 
+# @sdlc EXPERIMENT-RUNNER:REQ-039, RULE-003
+class UsageSummary(BaseModel):
+    """Token/cost usage extracted by a ``CliAdapter``'s ``parse_usage``.
+
+    Returned by ``CliAdapter.parse_usage`` and merged into a ``TrialResult``'s
+    token fields (``total_tokens``, ``input_tokens``, ``output_tokens``,
+    ``cache_read_tokens``). All fields default to 0 when the adapter cannot
+    determine a value (e.g. no usage data present in the captured output).
+    """
+
+    total_tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+
+
 class TrialTrace(BaseModel):
     """Structured view of a trial's recorded session history.
 
@@ -59,7 +78,9 @@ class TrialTrace(BaseModel):
     turn_count: int = 0
 
 
-# @sdlc EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-007, EXPERIMENT-RUNNER:REQ-008, EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-019, RULE-003
+# @sdlc EXPERIMENT-RUNNER:REQ-001, EXPERIMENT-RUNNER:REQ-005, EXPERIMENT-RUNNER:REQ-007,
+# @sdlc EXPERIMENT-RUNNER:REQ-008, EXPERIMENT-RUNNER:REQ-009, EXPERIMENT-RUNNER:REQ-017,
+# @sdlc EXPERIMENT-RUNNER:REQ-019, RULE-003
 class TrialResult(BaseModel):
     """Outcome of a single trial."""
 
@@ -81,7 +102,9 @@ class TrialResult(BaseModel):
     tool_call_count: int = 0
 
 
-# @sdlc EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-010, EXPERIMENT-RUNNER:REQ-012, EXPERIMENT-RUNNER:REQ-014, EXPERIMENT-RUNNER:REQ-015, RULE-003
+# @sdlc EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-010, EXPERIMENT-RUNNER:REQ-012,
+# @sdlc EXPERIMENT-RUNNER:REQ-014, EXPERIMENT-RUNNER:REQ-015, EXPERIMENT-RUNNER:REQ-035,
+# @sdlc EXPERIMENT-RUNNER:REQ-036, RULE-003
 class ExperimentConfig(BaseModel):
     """Configuration for an experiment run."""
 
@@ -93,6 +116,21 @@ class ExperimentConfig(BaseModel):
     cli_name: str = Field(default="zrb", min_length=1)
     cli_version: str = Field(default="")
     env_prefix: str = Field(default="ZRB", min_length=1)
+    # @sdlc EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-036
+    # Selects the CliAdapter used to invoke and parse the CLI under test.
+    # One of the built-in names ("zrb", "claude-code", "opencode") or a
+    # dotted Python import path to a custom CliAdapter class. Resolution
+    # (and rejection of bad values) happens at load time via
+    # `cli_adapters.resolve_cli_adapter` — not here — so a dotted path to a
+    # not-yet-importable module doesn't fail Pydantic validation itself.
+    cli_template: str = Field(default="zrb", min_length=1)
+    # @sdlc EXPERIMENT-RUNNER:REQ-007
+    # When False (default), a "VERIFICATION_RESULT:" line in the subprocess
+    # stdout is ignored and the validator (or exit code) alone decides the
+    # trial status. The marker lets the agent under test grade itself, so
+    # honoring it is opt-in for test cases whose instructions deliberately
+    # ask the agent to self-report.
+    honor_verification_marker: bool = False
 
     # @sdlc EXPERIMENT-RUNNER:REQ-015
     @field_validator("models")
