@@ -27,27 +27,26 @@ app = typer.Typer(
 )
 
 
-def _get_cli_version(cli_name: str) -> str:
+def _get_cli_version(cli_name: str, version_args: tuple[str, ...]) -> str:
     """Return the version string for ``cli_name``, or '' on failure.
 
-    Tries the conventional ``--version`` flag first, then zrb's ``version``
-    subcommand, accepting the first invocation that exits 0 with output.
+    ``version_args`` comes from the resolved CliAdapter (e.g. ``("version",)``
+    for zrb, ``("--version",)`` for claude/opencode) — no guessing, since a
+    wrong guess can invoke the CLI's real behavior (``claude version`` is
+    read as a prompt).
     """
-    for version_args in (["--version"], ["version"]):
-        try:
-            result = subprocess.run(
-                [cli_name, *version_args],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-        except Exception:
-            return ""
-        if result.returncode == 0:
-            output = result.stdout.strip() or result.stderr.strip()
-            if output:
-                return output
-    return ""
+    try:
+        result = subprocess.run(
+            [cli_name, *version_args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception:
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip() or result.stderr.strip()
 
 
 def _setup_logging() -> None:
@@ -134,8 +133,11 @@ def run(
     if not cli_name:
         cli_name = getattr(cli_adapter, "default_cli_name", "zrb")
 
-    # Validate & build config
-    cli_ver = _get_cli_version(cli_name)
+    # Validate & build config. version_args is optional on custom adapters
+    # (same getattr pattern as default_cli_name above) so pre-existing
+    # custom CliAdapter classes stay valid.
+    version_args = tuple(getattr(cli_adapter, "version_args", ("--version",)))
+    cli_ver = _get_cli_version(cli_name, version_args)
     try:
         config = ExperimentConfig(
             models=model_list,

@@ -28,9 +28,12 @@ Anything else is treated as a dotted Python import path to a custom
 The module must be importable (installed or on ``PYTHONPATH``) — the
 current working directory is not automatically searched.
 
-Each built-in adapter also carries a ``default_cli_name`` class attribute:
-the binary name the CLI layer uses when ``--cli-name`` isn't given, so
-``--cli-template claude-code`` doesn't silently invoke ``zrb -p ...``.
+Each built-in adapter also carries two class attributes consumed by the
+CLI layer: ``default_cli_name``, the binary name used when ``--cli-name``
+isn't given (so ``--cli-template claude-code`` doesn't silently invoke
+``zrb -p ...``), and ``version_args``, the argv suffix that prints the
+CLI's version (zrb has a ``version`` subcommand; ``claude version`` would
+be read as a prompt, so guessing is not safe there).
 """
 
 from __future__ import annotations
@@ -59,6 +62,8 @@ class ZrbCliAdapter:
     """
 
     default_cli_name = "zrb"
+    # zrb prints its version via a subcommand, not a --version flag.
+    version_args = ("version",)
 
     def build_argv(
         self, cli_name: str, model: str, instruction: str, session_name: str,
@@ -157,6 +162,8 @@ class ClaudeCodeCliAdapter:
     """
 
     default_cli_name = "claude"
+    # Must be --version: ``claude version`` is read as an interactive prompt.
+    version_args = ("--version",)
 
     def build_argv(
         self, cli_name: str, model: str, instruction: str, session_name: str,
@@ -272,6 +279,7 @@ class OpencodeCliAdapter:
     """
 
     default_cli_name = "opencode"
+    version_args = ("--version",)
 
     def build_argv(
         self, cli_name: str, model: str, instruction: str, session_name: str,
