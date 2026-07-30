@@ -2,6 +2,7 @@
 # COVERS: EXPERIMENT-RUNNER:REQ-010, EXPERIMENT-RUNNER:REQ-011, EXPERIMENT-RUNNER:REQ-012, EXPERIMENT-RUNNER:REQ-016, EXPERIMENT-RUNNER:REQ-017, EXPERIMENT-RUNNER:REQ-018, EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:REQ-030, EXPERIMENT-RUNNER:REQ-031, EXPERIMENT-RUNNER:NFR-001,
 # COVERS: EXPERIMENT-RUNNER:UT-003, EXPERIMENT-RUNNER:UT-004, EXPERIMENT-RUNNER:UT-005, EXPERIMENT-RUNNER:UT-007, EXPERIMENT-RUNNER:UT-008, EXPERIMENT-RUNNER:UT-009, EXPERIMENT-RUNNER:UT-010, EXPERIMENT-RUNNER:UT-011,
 # COVERS: EXPERIMENT-RUNNER:UT-013, EXPERIMENT-RUNNER:UT-014, EXPERIMENT-RUNNER:UT-019, EXPERIMENT-RUNNER:UT-020, EXPERIMENT-RUNNER:UT-021, EXPERIMENT-RUNNER:UT-024, EXPERIMENT-RUNNER:UT-043,
+# COVERS: EXPERIMENT-RUNNER:REQ-044, EXPERIMENT-RUNNER:UT-069,
 # COVERS: EXPERIMENT-RUNNER:UT-048, EXPERIMENT-RUNNER:UT-051, EXPERIMENT-RUNNER:UT-052, EXPERIMENT-RUNNER:UT-056, EXPERIMENT-RUNNER:UT-059
 
 """Tests for the runner module."""
@@ -37,6 +38,24 @@ def _mock_subprocess(mock_proc: AsyncMock):
     async def _create(*args: object, **kwargs: object) -> AsyncMock:
         return mock_proc
     return _create
+
+
+def _hanging_wait():
+    """Return a ``proc.wait()`` stand-in that drives the runner's timeout branch.
+
+    A real timeout is the deadline elapsing while ``wait()`` is still pending —
+    ``wait()`` itself never raises. So the first call hangs indefinitely and the
+    second (the runner's post-kill reap) returns cleanly.
+    """
+    calls = {"n": 0}
+
+    async def _wait() -> int:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            await asyncio.sleep(3600)
+        return 0
+
+    return _wait
 
 
 class TestCellPlan:
@@ -113,13 +132,11 @@ class TestTrialRunner:
         )
         output_dir = tmp_path / "out"
 
-        # Mock proc.wait to raise asyncio.TimeoutError so the runner's
-        # `except asyncio.TimeoutError` branch fires (matches the runner's
-        # `await asyncio.wait_for(proc.wait(), ...)` control flow).
+        # A hanging wait() drives the runner's timeout branch: the deadline
+        # elapses while the call is still pending, which is how a real timeout
+        # presents (wait() never raises).
         mock_proc = AsyncMock()
-        # First wait() raises TimeoutError (drives the timeout branch);
-        # second wait() (called after the group kill to reap) returns cleanly.
-        mock_proc.wait = AsyncMock(side_effect=[asyncio.TimeoutError, 0])
+        mock_proc.wait = AsyncMock(side_effect=_hanging_wait())
         mock_proc.kill = Mock()
         mock_proc.pid = 12345
 
@@ -165,10 +182,9 @@ class TestTrialRunner:
         )
         output_dir = tmp_path / "out"
 
-        # Mock proc.wait to raise asyncio.TimeoutError on the first call (drives
-        # the timeout branch) and return 0 on the post-kill reap.
+        # A hanging wait() drives the timeout branch; the post-kill reap returns 0.
         mock_proc = AsyncMock()
-        mock_proc.wait = AsyncMock(side_effect=[asyncio.TimeoutError, 0])
+        mock_proc.wait = AsyncMock(side_effect=_hanging_wait())
         mock_proc.kill = Mock()
         mock_proc.pid = 12345
 
@@ -896,7 +912,7 @@ class TestRunnerValidatorIntegration:
         mock_proc = AsyncMock()
         # First wait() raises TimeoutError (drives the timeout branch);
         # second wait() (called after the group kill to reap) returns cleanly.
-        mock_proc.wait = AsyncMock(side_effect=[asyncio.TimeoutError, 0])
+        mock_proc.wait = AsyncMock(side_effect=_hanging_wait())
         mock_proc.kill = Mock()
         mock_proc.pid = 12345
 
@@ -1034,3 +1050,88 @@ class TestCellDirWipe:
 
         assert not sentinel.exists(), "stale-artifact.txt must have been wiped by rmtree"
         assert cell_dir.is_dir(), "cell_dir must be recreated after wipe"
+
+
+class TestStdoutIdleTracking:
+    """Separate a hung provider from a runaway loop — @sdlc EXPERIMENT-RUNNER:REQ-044."""
+
+    @staticmethod
+    def _runner(tmp_path: Path, sample_test_case, timeout: int = 1) -> TrialRunner:
+        config = ExperimentConfig.model_construct(
+            models=["openai:gpt-4o"],
+            test_case_dirs=[tmp_path],
+            trials=1,
+            parallelism=1,
+            timeout=timeout,
+        )
+        return TrialRunner(config, sample_test_case, tmp_path / "out")
+
+    @pytest.mark.asyncio
+    async def test_silent_process_reports_idle_near_the_timeout(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """A process that stops writing looks like a hung provider request.
+
+        The log never grows, so the idle gap should span essentially the whole
+        wait — this is the signal that distinguishes a stall from a busy loop.
+        """
+        log = tmp_path / "quiet.log"
+        log.write_bytes(b"started\n")
+        mock_proc = AsyncMock()
+        mock_proc.wait = AsyncMock(side_effect=_hanging_wait())
+
+        runner = self._runner(tmp_path, sample_test_case)
+        timed_out, idle = await runner._wait_tracking_output(
+            mock_proc, log, timeout=1, poll_interval=0.05,
+        )
+
+        assert timed_out is True
+        assert idle >= 0.5
+
+    @pytest.mark.asyncio
+    async def test_growing_log_keeps_idle_low(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """A process still emitting output looks like a loop, not a stall.
+
+        Output written throughout the wait must keep resetting the idle gap, so
+        a timeout here is attributable to the agent rather than the provider.
+        """
+        log = tmp_path / "busy.log"
+        log.write_bytes(b"")
+
+        async def _write_until_killed() -> int:
+            for i in range(200):
+                with log.open("ab") as fh:
+                    fh.write(f"line {i}\n".encode())
+                await asyncio.sleep(0.02)
+            return 0
+
+        mock_proc = AsyncMock()
+        mock_proc.wait = AsyncMock(side_effect=_write_until_killed)
+
+        runner = self._runner(tmp_path, sample_test_case)
+        timed_out, idle = await runner._wait_tracking_output(
+            mock_proc, log, timeout=1, poll_interval=0.05,
+        )
+
+        assert timed_out is True
+        assert idle < 0.5
+
+    @pytest.mark.asyncio
+    async def test_clean_exit_is_not_reported_as_timeout(
+        self, tmp_path: Path, sample_test_case
+    ) -> None:
+        """A process that exits before the deadline returns timed_out=False."""
+        log = tmp_path / "done.log"
+        log.write_bytes(b"output\n")
+        mock_proc = AsyncMock()
+        mock_proc.wait = AsyncMock(return_value=0)
+
+        runner = self._runner(tmp_path, sample_test_case, timeout=30)
+        timed_out, idle = await runner._wait_tracking_output(
+            mock_proc, log, timeout=30, poll_interval=0.05,
+        )
+
+        assert timed_out is False
+        assert idle >= 0.0

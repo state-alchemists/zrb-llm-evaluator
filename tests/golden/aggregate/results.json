@@ -37,7 +37,9 @@
       "output_tokens": 0,
       "cache_read_tokens": 0,
       "tool_calls": [],
-      "tool_call_count": 0
+      "tool_call_count": 0,
+      "stdout_idle_seconds": 0.0,
+      "provider_error": ""
     },
     {
       "id": "trial-alpha:a-case-a-2",
@@ -59,7 +61,9 @@
       "output_tokens": 0,
       "cache_read_tokens": 0,
       "tool_calls": [],
-      "tool_call_count": 0
+      "tool_call_count": 0,
+      "stdout_idle_seconds": 0.0,
+      "provider_error": ""
     },
     {
       "id": "trial-alpha:a-case-b-1",
@@ -81,7 +85,9 @@
       "output_tokens": 0,
       "cache_read_tokens": 0,
       "tool_calls": [],
-      "tool_call_count": 0
+      "tool_call_count": 0,
+      "stdout_idle_seconds": 0.0,
+      "provider_error": ""
     },
     {
       "id": "trial-alpha:a-case-b-2",
@@ -103,7 +109,9 @@
       "output_tokens": 0,
       "cache_read_tokens": 0,
       "tool_calls": [],
-      "tool_call_count": 0
+      "tool_call_count": 0,
+      "stdout_idle_seconds": 0.0,
+      "provider_error": ""
     },
     {
       "id": "trial-beta:b-case-a-1",
@@ -125,7 +133,9 @@
       "output_tokens": 0,
       "cache_read_tokens": 0,
       "tool_calls": [],
-      "tool_call_count": 0
+      "tool_call_count": 0,
+      "stdout_idle_seconds": 0.0,
+      "provider_error": ""
     },
     {
       "id": "trial-beta:b-case-a-2",
@@ -147,7 +157,9 @@
       "output_tokens": 0,
       "cache_read_tokens": 0,
       "tool_calls": [],
-      "tool_call_count": 0
+      "tool_call_count": 0,
+      "stdout_idle_seconds": 0.0,
+      "provider_error": ""
     },
     {
       "id": "trial-beta:b-case-b-1",
@@ -169,7 +181,9 @@
       "output_tokens": 0,
       "cache_read_tokens": 0,
       "tool_calls": [],
-      "tool_call_count": 0
+      "tool_call_count": 0,
+      "stdout_idle_seconds": 0.0,
+      "provider_error": ""
     },
     {
       "id": "trial-beta:b-case-b-2",
@@ -191,7 +205,9 @@
       "output_tokens": 0,
       "cache_read_tokens": 0,
       "tool_calls": [],
-      "tool_call_count": 0
+      "tool_call_count": 0,
+      "stdout_idle_seconds": 0.0,
+      "provider_error": ""
     }
   ],
   "started_at": "2024-01-01T00:00:00Z",

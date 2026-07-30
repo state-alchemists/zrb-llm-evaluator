@@ -1,5 +1,6 @@
 # GENERATED FROM SPEC: .sdlc/specs/experiment-runner/spec.md
-# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-019
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:REQ-043,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-045
 
 """Parse cost / token summary lines and tool calls from zrb output."""
 
@@ -26,6 +27,35 @@ _COST_LINE_PATTERN = re.compile(
     r".*?(?<!Audio\s)Input:\s*(?P<input>\d+)"
     r".*?(?<!Audio\s)Output:\s*(?P<output>\d+)"
     r".*?Cache Read:\s*(?P<cache>\d+)"
+)
+
+# @sdlc EXPERIMENT-RUNNER:REQ-043
+# Matches a tool invocation in zrb's console stream, which is the only record
+# left when a trial is SIGKILLed before zrb can write its history JSON:
+#   🧰 dkhjh1nc | LS {}
+#   🧰 4104giut | Read {'path': '...'}
+# The call id is opaque; the tool name is the identifier between "| " and " {".
+_STDOUT_TOOL_CALL_PATTERN = re.compile(
+    r"🧰\s+\S+\s*\|\s*(?P<tool>[A-Za-z_][A-Za-z0-9_]*)",
+)
+
+# @sdlc EXPERIMENT-RUNNER:REQ-045
+# Provider-side failures (billing, quota, auth, throttling) look like model
+# failures in the results: the trial exits non-zero or burns its whole budget
+# on retries. Each entry is a literal substring or regex matched against the
+# combined stdout/stderr stream, paired with the reason recorded on the trial.
+_PROVIDER_ERROR_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"exceeded your current quota", re.IGNORECASE), "quota_exceeded"),
+    (re.compile(r"insufficient_quota", re.IGNORECASE), "quota_exceeded"),
+    (re.compile(r"RESOURCE_EXHAUSTED", re.IGNORECASE), "quota_exceeded"),
+    (re.compile(r"\bRateLimitError\b"), "rate_limited"),
+    # Anchored on the provider's own phrasing so a bare "429" in model output
+    # (an HTTP example, a test fixture) cannot be mistaken for a real failure.
+    (re.compile(r"(?:Error code|status(?:_code)?)[:=\s]*429"), "rate_limited"),
+    (re.compile(r"\bToo Many Requests\b", re.IGNORECASE), "rate_limited"),
+    (re.compile(r"\bAuthenticationError\b"), "auth_failed"),
+    (re.compile(r"\binvalid_api_key\b", re.IGNORECASE), "auth_failed"),
+    (re.compile(r"(?:Error code|status(?:_code)?)[:=\s]*401"), "auth_failed"),
 )
 
 
@@ -86,9 +116,16 @@ def extract_tool_calls_from_history(history_path: Path) -> list[str]:
         return []
     try:
         raw = history_path.read_text(encoding="utf-8")
-        data: Any = json.loads(raw)
-    except (OSError, json.JSONDecodeError, ValueError):
+    except OSError:
         return []
+    try:
+        data: Any = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        # @sdlc EXPERIMENT-RUNNER:REQ-043: not JSON — this is the console
+        # stream the runner snapshots here when zrb never got to write its
+        # history (a SIGKILLed timeout). The tool calls are still recorded in
+        # it, so recover them rather than reporting a trial that did nothing.
+        return extract_tool_calls_from_zrb_stdout(raw)
 
     names: list[str] = []
     try:
@@ -97,7 +134,61 @@ def extract_tool_calls_from_history(history_path: Path) -> list[str]:
             names.extend(_extract_tool_names(entry))
     except (TypeError, AttributeError, KeyError):
         return []
+    if not names:
+        # Valid JSON carrying no tool calls: either the trial genuinely made
+        # none, or the payload is the console stream that happened to parse
+        # (e.g. a lone JSON object logged to stdout). Falling back is safe —
+        # a real empty history yields nothing from the console pattern either.
+        return extract_tool_calls_from_zrb_stdout(raw)
     return names
+
+
+# @sdlc EXPERIMENT-RUNNER:REQ-043
+def extract_tool_calls_from_zrb_stdout(stdout: str) -> list[str]:
+    """Extract tool-call names from zrb's console stream.
+
+    Fallback for when no parseable history JSON exists — chiefly a trial that
+    was SIGKILLed on timeout, where zrb's ``history_manager.save()`` never ran
+    and the runner snapshotted stdout to the history path instead. Without this
+    such a trial reports zero tool calls, which reads as "did nothing" when it
+    may have made hundreds.
+
+    Args:
+    ----
+        stdout: Combined stdout/stderr text, ANSI escapes included.
+
+    Returns:
+    -------
+        Ordered list of tool names invoked; empty list when none are found.
+
+    """
+    return [m.group("tool") for m in _STDOUT_TOOL_CALL_PATTERN.finditer(stdout)]
+
+
+# @sdlc EXPERIMENT-RUNNER:REQ-045
+def detect_provider_error(stdout: str) -> str:
+    """Return a short reason when the output shows a provider-side failure.
+
+    Distinguishes infrastructure failures (billing, quota, auth, throttling)
+    from model failures. Without it a depleted API key reads as a capability
+    regression: the trial exits non-zero, or spends its whole budget on
+    retries and is recorded as a timeout.
+
+    Args:
+    ----
+        stdout: Combined stdout/stderr text.
+
+    Returns:
+    -------
+        One of ``"quota_exceeded"``, ``"rate_limited"``, ``"auth_failed"``, or
+        ``""`` when no provider failure is evident. The first matching pattern
+        wins, so a run showing several reports the earliest in the list.
+
+    """
+    for pattern, reason in _PROVIDER_ERROR_PATTERNS:
+        if pattern.search(stdout):
+            return reason
+    return ""
 
 
 # @sdlc EXPERIMENT-RUNNER:REQ-019

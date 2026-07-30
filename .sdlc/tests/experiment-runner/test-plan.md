@@ -78,6 +78,12 @@
 | UT-070 | REQ-041 | test_claude_code_parses_usage_from_json_output | Sample Claude Code JSON stdout containing a `usage` block | `UsageSummary` fields match the JSON's input/output/cache-read counts <!-- added 2026-07-03 (spec/cli-templates) --> |
 | UT-071 | REQ-042 | test_opencode_argv_uses_run_mode | `cli_template="opencode"` | `build_argv` returns an argv beginning with `cli_name` and opencode's non-interactive run subcommand <!-- added 2026-07-03 (spec/cli-templates) --> |
 | UT-072 | REQ-042 | test_opencode_parses_usage_from_output | Sample opencode stdout | `UsageSummary` fields populated by `OpencodeCliAdapter.parse_usage` <!-- added 2026-07-03 (spec/cli-templates) --> |
+| UT-069 | REQ-044 | test_silent_process_reports_idle_near_the_timeout | Hanging `proc.wait()`, log never grows, timeout=1s | `stdout_idle_seconds` spans essentially the whole wait, marking a hung provider request <!-- added 2026-07-30 (spec/timeout-forensics) --> |
+| UT-070 | REQ-044 | test_growing_log_keeps_idle_low | `proc.wait()` appending to the log throughout, timeout=1s | `stdout_idle_seconds` stays near zero, marking a non-terminating agent loop <!-- added 2026-07-30 (spec/timeout-forensics) --> |
+| UT-071 | REQ-043 | test_history_falls_back_when_content_is_not_json | zrb console stream written at `history_log_path` (the SIGKILL snapshot) | Tool names recovered from the stream instead of `tool_call_count` 0 <!-- added 2026-07-30 (spec/timeout-forensics) --> |
+| UT-072 | REQ-043 | test_valid_json_history_still_wins | Valid history JSON containing one tool call | JSON parsing takes precedence; the console fallback does not shadow it <!-- added 2026-07-30 (spec/timeout-forensics) --> |
+| UT-073 | REQ-045 | test_quota_exhaustion_is_reported | Output containing the provider's quota phrasing | `provider_error == "quota_exceeded"` <!-- added 2026-07-30 (spec/timeout-forensics) --> |
+| UT-074 | REQ-045 | test_bare_429_in_output_is_not_a_provider_error | Agent output mentioning HTTP 429 in prose | `provider_error == ""` — a healthy trial is not marked infrastructure-broken <!-- added 2026-07-30 (spec/timeout-forensics) --> |
 
 ## Integration Tests
 
