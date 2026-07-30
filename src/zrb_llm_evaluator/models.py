@@ -100,6 +100,18 @@ class TrialResult(BaseModel):
     cache_read_tokens: int = 0
     tool_calls: list[str] = Field(default_factory=list)
     tool_call_count: int = 0
+    # @sdlc EXPERIMENT-RUNNER:REQ-044
+    # Seconds between the last growth of the stdout log and the trial ending.
+    # For a timeout this separates the two causes that otherwise look
+    # identical: a value near the timeout means the process went silent (a
+    # hung provider request), while a value near zero means it was still
+    # emitting output when killed (a non-terminating agent loop).
+    stdout_idle_seconds: float = Field(default=0.0, ge=0.0)
+    # @sdlc EXPERIMENT-RUNNER:REQ-045
+    # Non-empty when the output shows a provider-side failure (quota, rate
+    # limit, auth) rather than a model failure: "quota_exceeded",
+    # "rate_limited", or "auth_failed".
+    provider_error: str = ""
 
 
 # @sdlc EXPERIMENT-RUNNER:REQ-004, EXPERIMENT-RUNNER:REQ-010, EXPERIMENT-RUNNER:REQ-012,

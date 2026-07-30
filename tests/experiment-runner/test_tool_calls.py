@@ -1,4 +1,5 @@
-# COVERS: EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:UT-026
+# COVERS: EXPERIMENT-RUNNER:REQ-019, EXPERIMENT-RUNNER:REQ-043,
+# COVERS: EXPERIMENT-RUNNER:REQ-045, EXPERIMENT-RUNNER:UT-026
 
 """Tests for tool-call extraction from zrb history JSON."""
 
@@ -9,7 +10,9 @@ from pathlib import Path
 
 from zrb_llm_evaluator.cost_parser import (
     count_tool_calls_from_history,
+    detect_provider_error,
     extract_tool_calls_from_history,
+    extract_tool_calls_from_zrb_stdout,
 )
 
 
@@ -124,3 +127,89 @@ class TestToolCallExtraction:
         names, count = count_tool_calls_from_history(p)
         assert names == ["Read", "Grep", "Edit"]
         assert count == 3
+
+
+class TestConsoleStreamFallback:
+    """Recover tool calls when no history JSON exists — @sdlc EXPERIMENT-RUNNER:REQ-043."""
+
+    # zrb's console format, ANSI escapes included, as streamed to the log.
+    _CONSOLE = (
+        "\x1b[2m\n  \U0001f504 Prepare tool parameters...\x1b[0m\x1b[2m\n"
+        "  \U0001f9f0 dkhjh1nc | LS {}\n\x1b[0m\x1b[2m\n"
+        "  \U0001f520 dkhjh1nc Executed\n\x1b[0m\x1b[2m\n"
+        "  \U0001f9f0 4104giut | Read {'path': '/tmp/x.py'}\n\x1b[0m\n"
+        "  \U0001f9f0 zz11aa22 | ActivateSkill {'skill': 'core-coding'}\n"
+    )
+
+    def test_parses_tool_names_from_console_stream(self) -> None:
+        """Names come from between the call id and the argument dict."""
+        assert extract_tool_calls_from_zrb_stdout(self._CONSOLE) == [
+            "LS", "Read", "ActivateSkill",
+        ]
+
+    def test_no_tool_calls_yields_empty(self) -> None:
+        """Console text without invocations yields nothing, not a spurious name."""
+        assert extract_tool_calls_from_zrb_stdout("just some prose\nand a line") == []
+
+    def test_history_falls_back_when_content_is_not_json(self, tmp_path: Path) -> None:
+        """A SIGKILLed timeout leaves the console stream at the history path.
+
+        The runner snapshots stdout there when zrb never wrote its JSON, so the
+        trial must not be reported as having made zero tool calls.
+        """
+        p = tmp_path / "history.json"
+        p.write_text(self._CONSOLE, encoding="utf-8")
+
+        names, count = count_tool_calls_from_history(p)
+
+        assert names == ["LS", "Read", "ActivateSkill"]
+        assert count == 3
+
+    def test_valid_json_history_still_wins(self, tmp_path: Path) -> None:
+        """The fallback must not shadow a real history JSON."""
+        p = tmp_path / "history.json"
+        p.write_text(
+            json.dumps([{"parts": [{"part_kind": "tool-call", "tool_name": "Edit"}]}]),
+            encoding="utf-8",
+        )
+        assert count_tool_calls_from_history(p) == (["Edit"], 1)
+
+    def test_empty_history_json_stays_empty(self, tmp_path: Path) -> None:
+        """Valid JSON with no tool calls yields nothing — no false positives."""
+        p = tmp_path / "history.json"
+        p.write_text("[]", encoding="utf-8")
+        assert count_tool_calls_from_history(p) == ([], 0)
+
+
+class TestProviderErrorDetection:
+    """Separate infrastructure failures from model failures — @sdlc EXPERIMENT-RUNNER:REQ-045."""
+
+    def test_quota_exhaustion_is_reported(self) -> None:
+        """The provider's own phrasing, as emitted through zrb's retry loop."""
+        text = (
+            "[ERROR] Attempt 1/3 failed: You exceeded your current quota, "
+            "please check your plan and billing details."
+        )
+        assert detect_provider_error(text) == "quota_exceeded"
+
+    def test_resource_exhausted_is_quota(self) -> None:
+        """Google's equivalent surfaces as RESOURCE_EXHAUSTED."""
+        assert detect_provider_error("429 RESOURCE_EXHAUSTED") == "quota_exceeded"
+
+    def test_rate_limit_and_auth_are_distinguished(self) -> None:
+        """Each class carries its own reason so the report can separate them."""
+        assert detect_provider_error("openai.RateLimitError: slow down") == "rate_limited"
+        assert detect_provider_error("Error code: 401") == "auth_failed"
+
+    def test_bare_429_in_output_is_not_a_provider_error(self) -> None:
+        """A status code mentioned in model output must not fake a failure.
+
+        Guards the false positive that would let ordinary agent output about
+        HTTP codes mark an otherwise healthy trial as infrastructure-broken.
+        """
+        assert detect_provider_error("the endpoint returns HTTP 429 on throttle") == ""
+        assert detect_provider_error("15 passed; 429 rows returned") == ""
+
+    def test_healthy_output_reports_nothing(self) -> None:
+        """No provider failure => empty reason."""
+        assert detect_provider_error("All tests passed in 0.02s") == ""

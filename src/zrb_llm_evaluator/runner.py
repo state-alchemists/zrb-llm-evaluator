@@ -10,7 +10,8 @@
 # IMPLEMENTS: EXPERIMENT-RUNNER:NFR-001, EXPERIMENT-RUNNER:NFR-002, RULE-005, RULE-012
 # IMPLEMENTS: EXPERIMENT-RUNNER:REQ-030, EXPERIMENT-RUNNER:REQ-031
 # IMPLEMENTS: EXPERIMENT-RUNNER:REQ-035, EXPERIMENT-RUNNER:REQ-036, EXPERIMENT-RUNNER:REQ-038,
-# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-039, EXPERIMENT-RUNNER:REQ-040
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-039, EXPERIMENT-RUNNER:REQ-040,
+# IMPLEMENTS: EXPERIMENT-RUNNER:REQ-044, EXPERIMENT-RUNNER:REQ-045
 
 """Async experiment runner with subprocess orchestration."""
 
@@ -30,7 +31,7 @@ from pathlib import Path
 from typing import Literal
 
 from zrb_llm_evaluator.cli_adapters import resolve_cli_adapter
-from zrb_llm_evaluator.cost_parser import build_trial_trace
+from zrb_llm_evaluator.cost_parser import build_trial_trace, detect_provider_error
 from zrb_llm_evaluator.loader import TestCase, make_safe_name, make_session_name
 from zrb_llm_evaluator.models import (
     Experiment,
@@ -339,9 +340,14 @@ class TrialRunner:
                     start_new_session=True,
                 )
 
-                try:
-                    await asyncio.wait_for(proc.wait(), timeout=self._config.timeout)
-                except asyncio.TimeoutError:
+                # @sdlc EXPERIMENT-RUNNER:REQ-044: waiting in poll steps rather
+                # than one `wait_for` lets the runner watch the log grow, which
+                # is what separates a hung provider request from a runaway agent
+                # loop after the fact. Timeout semantics are unchanged.
+                timed_out, idle_seconds = await self._wait_tracking_output(
+                    proc, log_path, self._config.timeout,
+                )
+                if timed_out:
                     # @sdlc EXPERIMENT-RUNNER:REQ-005: kill the entire descendant process group,
                     # not just the direct child. `zrb chat` spawns LLM HTTP
                     # workers that survive a SIGKILL to the leader alone.
@@ -385,6 +391,10 @@ class TrialRunner:
                         verification_result=timeout_verification,
                         tool_calls=tool_calls,
                         tool_call_count=tool_call_count,
+                        stdout_idle_seconds=idle_seconds,
+                        provider_error=detect_provider_error(
+                            log_path.read_text(encoding="utf-8", errors="replace"),
+                        ),
                     )
 
             duration = time.monotonic() - start
@@ -464,6 +474,8 @@ class TrialRunner:
                 cache_read_tokens=usage.cache_read_tokens,
                 tool_calls=tool_calls,
                 tool_call_count=tool_call_count,
+                stdout_idle_seconds=idle_seconds,
+                provider_error=detect_provider_error(stdout),
             )
 
         except Exception as exc:
@@ -485,6 +497,60 @@ class TrialRunner:
                 tool_calls=tool_calls,
                 tool_call_count=tool_call_count,
             )
+
+    # @sdlc EXPERIMENT-RUNNER:REQ-044
+    async def _wait_tracking_output(
+        self,
+        proc: asyncio.subprocess.Process,
+        log_path: Path,
+        timeout: int,
+        poll_interval: float = 2.0,
+    ) -> tuple[bool, float]:
+        """Await ``proc``, sampling the log's size to measure output silence.
+
+        Returns ``(timed_out, stdout_idle_seconds)``. ``stdout_idle_seconds`` is
+        the gap between the log's last growth and this call returning, which is
+        what makes the two causes of a timeout distinguishable afterwards: a
+        value near ``timeout`` means the process stopped emitting output (a hung
+        provider request), while one near zero means it was still working when
+        the deadline hit (a non-terminating loop).
+
+        Sampling size is deliberate rather than mtime: a filesystem with coarse
+        mtime granularity would understate short gaps, and size is monotonic for
+        an append-only stream. The final sample is taken after the wait ends so
+        output written during the last interval still counts.
+        """
+        deadline = time.monotonic() + timeout
+        last_size = self._log_size(log_path)
+        last_growth = time.monotonic()
+        waiter = asyncio.ensure_future(proc.wait())
+        try:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return True, max(0.0, time.monotonic() - last_growth)
+                done, _ = await asyncio.wait(
+                    {waiter}, timeout=min(poll_interval, remaining),
+                )
+                size = self._log_size(log_path)
+                if size > last_size:
+                    last_size = size
+                    last_growth = time.monotonic()
+                if done:
+                    # Surface a crash in the child the same way `wait()` would.
+                    await waiter
+                    return False, max(0.0, time.monotonic() - last_growth)
+        finally:
+            if not waiter.done():
+                waiter.cancel()
+
+    @staticmethod
+    def _log_size(log_path: Path) -> int:
+        """Return the streamed log's size, or 0 if it cannot be read yet."""
+        try:
+            return log_path.stat().st_size
+        except OSError:
+            return 0
 
     # @sdlc EXPERIMENT-RUNNER:REQ-008, EXPERIMENT-RUNNER:REQ-040
     @staticmethod
